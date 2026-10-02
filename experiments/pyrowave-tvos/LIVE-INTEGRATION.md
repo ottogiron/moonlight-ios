@@ -3,7 +3,7 @@
 This is the client side of the authenticated Apollo session experiment. The TV
 setting **Experimental Video** defaults off. When enabled, the client checks
 both `/serverinfo` tags and both RTSP DESCRIBE attributes for envelope version
-`1` and pin `89f7e47d4abbf650c91fae766728af866c5e32a0`. Missing or
+`2` and pin `89f7e47d4abbf650c91fae766728af866c5e32a0`. Missing or
 mismatched capability keeps conventional negotiation. The common-c selection
 also requires the Sunshine SDP generation path used by Apollo. Non-60 fps, unsupported
 dimensions, HDR preference, or a bitrate below the host's minimum also keep
@@ -57,8 +57,10 @@ experiments/pyrowave-tvos/build/drawable-size
 ```
 
 The parser accepts one complete decode unit only after checking its header,
-negotiated dimensions and frame number, color profile, counts, packet lengths,
-limits and exact consumption. Each frame independently clears the decoder.
+negotiated dimensions and frame number, color profile, counts, record lengths,
+limits and exact consumption. common-c reassembles RTP fragments before the
+client parses the envelope and passes each complete codec record to the decoder.
+Each frame independently clears the decoder.
 One Metal command buffer owns decode, render and presentation; one in-flight
 frame bounds texture reuse and teardown drains it. No CPU pixel readback is
 used in live playback. The tvOS app ends an active experimental stream when it
@@ -67,17 +69,31 @@ remains unchanged.
 
 ## Current contract limits
 
-Apollo `992255f1499b0d4562623a84b1b6f1999d254b12` accepts 1920×1080
-or 3840×2160 at 60 fps SDR. Both sizes use the same version 1 big-endian
-envelope, profile 1, 1 MiB frame cap, 1024 packet cap and 1200-byte record cap.
-The client allocates the negotiated dimensions. Smoke-test 1080p60 first,
-then validate 4K60 on a 4K output: confirm the live log records a 3840×2160
-**actual drawable texture**, sustained presentation, bandwidth and image
-quality. On lower-resolution displays the requested drawable is limited by
-the native mode, and the log records the actual size used for scaling.
-Current 2560×1440 host capture means
-initial 4K output is scaled capture, not native 4K detail. Unsigned builds
-do not establish physical TV playback, 4K quality or latency benefit.
+Apollo accepts exactly 1920×1080, 2560×1440, or 3840×2160 at 60 fps SDR.
+All three sizes use the same
+version 2 big-endian `PWR2` envelope (32-byte header, flags 1, color profile 1),
+1 MiB absolute frame cap, 1–1024 codec records and 1–65536 bytes per record.
+The codec record limit is independent of RTP MTU; transport packet size, FEC
+and encryption remain unchanged. A v1 capability or envelope is rejected.
+The negotiated client frame cap is the smaller of 1 MiB and
+`ceil(requested_kbps * 1000 / (8 * fps)) + 32 + 4 * 1024` bytes. The extra
+bytes cover the header and all possible record-length prefixes. At 60 fps,
+100/150/200 Mbps give 212462/316628/420795 bytes. Invalid nonpositive
+bitrate or frame rate yields a zero cap; the host still enforces its tighter
+padded RTP/FEC/wire budget.
+The tvOS settings already offer 1440p. The client opts in only for one of these
+three exact modes, and the parser and renderer reject other dimensions.
+common-c has no separate geometry allowlist: it sends the configured width and
+height through the same v2 negotiation. The client allocates the negotiated
+dimensions. Smoke-test 1080p60, then 1440p60 on a native 2560×1440 output:
+confirm the live log records decoded 2560×1440 and a 2560×1440 **actual
+drawable texture**, sustained presentation, bandwidth and image quality.
+On a 4K TV, 1440p decoded content may scale to a 3840×2160 drawable normally;
+check the logged native display, requested drawable and actual texture size.
+Validate 4K60 separately on a 4K output. On lower-resolution displays the
+requested drawable is limited by the native mode. Current 2560×1440 host
+capture means 4K output is scaled capture, not native 4K detail. Unsigned
+builds do not establish physical TV playback, quality or latency benefit.
 
 Profile 1 is **full-range BT.709 matrix, center-sited 4:2:0 SDR** with
 nonlinear sRGB input/output. The live shader uses the full-range transform;

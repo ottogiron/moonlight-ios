@@ -66,8 +66,8 @@ fragment float4 pwLiveFragment(Out in [[stage_in]],
 - (instancetype)initWithView:(UIView *)view width:(NSUInteger)width height:(NSUInteger)height
                    callbacks:(id<ConnectionCallbacks>)callbacks {
     if (!(self = [super init])) return nil;
-    if (![NSThread isMainThread] || !view || !callbacks || !width || !height ||
-        (width & 1) || (height & 1) || width > 3840 || height > 2160) return nil;
+    if (![NSThread isMainThread] || !view || !callbacks ||
+        !PWLiveDimensionsSupported(width, height)) return nil;
     _view = view; _callbacks = callbacks; _width = width; _height = height;
     _metalDevice = MTLCreateSystemDefaultDevice();
     if (!_metalDevice || !pyrowave_device_is_supported((__bridge void *)_metalDevice)) return nil;

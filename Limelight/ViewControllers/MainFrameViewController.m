@@ -11,6 +11,7 @@
 #import "CryptoManager.h"
 #import "HttpManager.h"
 #import "Connection.h"
+#import "PyrowaveEnvelope.h"
 #import "StreamManager.h"
 #import "Utils.h"
 #import "UIComputerView.h"
@@ -665,8 +666,7 @@ static NSMutableSet* hostList;
     _streamConfig.experimentalVideo = streamSettings.experimentalVideo && !streamSettings.enableHdr &&
         _streamConfig.bitRate >= 13200 &&
         _streamConfig.frameRate == 60 &&
-        ((_streamConfig.width == 1920 && _streamConfig.height == 1080) ||
-         (_streamConfig.width == 3840 && _streamConfig.height == 2160));
+        PWLiveDimensionsSupported(_streamConfig.width, _streamConfig.height);
 #endif
     
     switch (streamSettings.preferredCodec) {

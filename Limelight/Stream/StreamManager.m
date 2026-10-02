@@ -86,7 +86,7 @@
     // The serverinfo tags are only an early gate. common-c checks the exact
     // DESCRIBE attributes again before selecting the experimental format.
     if (_config.experimentalVideo &&
-        [[[serverInfoResp getStringTag:@"ApolloPyrowaveVersion"] trim] isEqualToString:@"1"] &&
+        [[[serverInfoResp getStringTag:@"ApolloPyrowaveVersion"] trim] isEqualToString:@"2"] &&
         [[[serverInfoResp getStringTag:@"ApolloPyrowavePin"] trim]
          isEqualToString:@"89f7e47d4abbf650c91fae766728af866c5e32a0"] &&
         PyrowaveLiveDecoderSupported()) {

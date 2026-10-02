@@ -153,17 +153,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
         uint8_t *bytes = malloc(length);
         if (!bytes) return DR_OK;
         for (PLENTRY entry = decodeUnit->bufferList; entry; entry = entry->next) {
-            if (entry->bufferType != BUFFER_TYPE_PICDATA || !entry->data || entry->length <= 0 ||
-                (size_t)entry->length > length - offset) {
+            if (entry->bufferType != BUFFER_TYPE_PICDATA || entry->length <= 0 ||
+                !PWAppendFragment(bytes, length, &offset, entry->data, (size_t)entry->length)) {
                 free(bytes);
                 return DR_OK;
             }
-            memcpy(bytes + offset, entry->data, entry->length);
-            offset += (size_t)entry->length;
         }
         PWPacketRange ranges[PW_MAX_PACKETS];
         size_t count = 0;
-        // The wire/FEC budget is tighter than this conservative decoded cap.
+        // The host's padded RTP/FEC budget is tighter than this decoded cap.
         if (offset != length || !PWParseEnvelope(bytes, length, (uint16_t)pyrowaveWidth,
                 (uint16_t)pyrowaveHeight, (uint32_t)decodeUnit->frameNumber,
                 pyrowaveFrameCap, ranges, &count)) {
@@ -501,10 +499,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     if (config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE) {
-        // This is an upper bound on host-adjusted video bytes per frame;
-        // the host applies its tighter padded RTP/FEC/encryption budget.
-        int adjustedKbps = MIN(config.bitRate * 8 / 10, 100000);
-        pyrowaveFrameCap = MIN(PW_MAX_FRAME_BYTES, (size_t)MAX(adjustedKbps, 0) * 1000 / 8 / 60);
+        pyrowaveFrameCap = PWFrameCapForBitrate(config.bitRate, config.frameRate);
     }
     _streamConfig.audioConfiguration = config.audioConfiguration;
     
