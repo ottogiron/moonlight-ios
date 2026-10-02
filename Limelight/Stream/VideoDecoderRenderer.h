@@ -11,6 +11,7 @@
 #import "ConnectionCallbacks.h"
 
 #include "Limelight.h"
+#include "PyrowaveEnvelope.h"
 
 @interface VideoDecoderRenderer : NSObject
 
@@ -22,5 +23,7 @@
 - (void)setHdrMode:(BOOL)enabled;
 
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du;
+- (int)submitPyrowaveFrame:(const uint8_t *)bytes length:(size_t)length
+                   ranges:(const PWPacketRange *)ranges count:(size_t)count;
 
 @end

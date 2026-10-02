@@ -16,6 +16,7 @@
 
 #include "Limelight.h"
 #include "opus_multistream.h"
+#include "PyrowaveEnvelope.h"
 
 @implementation Connection {
     SERVER_INFORMATION _serverInfo;
@@ -34,6 +35,9 @@ static OpusMSDecoder* opusDecoder;
 static id<ConnectionCallbacks> _callbacks;
 static int lastFrameNumber;
 static int activeVideoFormat;
+static uint32_t lastPyrowaveFrame;
+static int pyrowaveWidth, pyrowaveHeight;
+static size_t pyrowaveFrameCap;
 static video_stats_t currentVideoStats;
 static video_stats_t lastVideoStats;
 static NSLock* videoStatsLock;
@@ -50,6 +54,9 @@ int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void*
     [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
     lastFrameNumber = 0;
     activeVideoFormat = videoFormat;
+    lastPyrowaveFrame = 0;
+    pyrowaveWidth = width;
+    pyrowaveHeight = height;
     memset(&currentVideoStats, 0, sizeof(currentVideoStats));
     memset(&lastVideoStats, 0, sizeof(lastVideoStats));
     return 0;
@@ -63,6 +70,8 @@ void DrStart(void)
 void DrStop(void)
 {
     [renderer stop];
+    activeVideoFormat = 0;
+    lastPyrowaveFrame = 0;
 }
 
 -(BOOL) getVideoStats:(video_stats_t*)stats
@@ -124,6 +133,8 @@ void DrStop(void)
             else {
                 return @"AV1 10-bit SDR (4:4:4)";
             }
+        case VIDEO_FORMAT_PYROWAVE:
+            return @"Experimental video";
         default:
             return @"UNKNOWN";
     }
@@ -131,6 +142,39 @@ void DrStop(void)
 
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
+    if (activeVideoFormat == VIDEO_FORMAT_PYROWAVE) {
+        if (!decodeUnit || decodeUnit->fullLength < 32 ||
+            decodeUnit->fullLength > PW_MAX_FRAME_BYTES ||
+            decodeUnit->frameType != FRAME_TYPE_IDR ||
+            decodeUnit->frameNumber <= 0 ||
+            (lastPyrowaveFrame && (uint32_t)decodeUnit->frameNumber <= lastPyrowaveFrame))
+            return DR_OK;
+        size_t length = (size_t)decodeUnit->fullLength, offset = 0;
+        uint8_t *bytes = malloc(length);
+        if (!bytes) return DR_OK;
+        for (PLENTRY entry = decodeUnit->bufferList; entry; entry = entry->next) {
+            if (entry->bufferType != BUFFER_TYPE_PICDATA || !entry->data || entry->length <= 0 ||
+                (size_t)entry->length > length - offset) {
+                free(bytes);
+                return DR_OK;
+            }
+            memcpy(bytes + offset, entry->data, entry->length);
+            offset += (size_t)entry->length;
+        }
+        PWPacketRange ranges[PW_MAX_PACKETS];
+        size_t count = 0;
+        // The wire/FEC budget is tighter than this conservative decoded cap.
+        if (offset != length || !PWParseEnvelope(bytes, length, (uint16_t)pyrowaveWidth,
+                (uint16_t)pyrowaveHeight, (uint32_t)decodeUnit->frameNumber,
+                pyrowaveFrameCap, ranges, &count)) {
+            free(bytes);
+            return DR_OK;
+        }
+        lastPyrowaveFrame = (uint32_t)decodeUnit->frameNumber;
+        int status = [renderer submitPyrowaveFrame:bytes length:length ranges:ranges count:count];
+        free(bytes);
+        return status;
+    }
     int offset = 0;
     int ret;
     unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
@@ -205,6 +249,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                  length:offset
                              bufferType:BUFFER_TYPE_PICDATA
                              decodeUnit:decodeUnit];
+}
+
+-(BOOL) isExperimentalVideoActive
+{
+    return activeVideoFormat == VIDEO_FORMAT_PYROWAVE;
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
@@ -352,6 +401,16 @@ void ClConnectionStatusUpdate(int status)
 
 void ClSetHdrMode(bool enabled)
 {
+    if (activeVideoFormat == VIDEO_FORMAT_PYROWAVE && enabled) {
+        [renderer setHdrMode:YES];
+        LiInterruptConnection();
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+            [initLock lock];
+            LiStopConnection();
+            [initLock unlock];
+        });
+        return;
+    }
     [renderer setHdrMode:enabled];
     [_callbacks setHdrMode:enabled];
 }
@@ -441,6 +500,12 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.fps = config.frameRate;
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
+    if (config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE) {
+        // This is an upper bound on host-adjusted video bytes per frame;
+        // the host applies its tighter padded RTP/FEC/encryption budget.
+        int adjustedKbps = MIN(config.bitRate * 8 / 10, 100000);
+        pyrowaveFrameCap = MIN(PW_MAX_FRAME_BYTES, (size_t)MAX(adjustedKbps, 0) * 1000 / 8 / 60);
+    }
     _streamConfig.audioConfiguration = config.audioConfiguration;
     
     // Since we require iOS 12 or above, we're guaranteed to be running

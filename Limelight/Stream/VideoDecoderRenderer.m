@@ -8,6 +8,9 @@
 
 #import "VideoDecoderRenderer.h"
 #import "StreamView.h"
+#if TARGET_OS_TV
+#import "PyrowaveLiveRenderer.h"
+#endif
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
@@ -35,6 +38,12 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
+#if TARGET_OS_TV
+    PyrowaveLiveRenderer *_pyrowave;
+    int _pyrowaveWidth, _pyrowaveHeight;
+    BOOL _pyrowaveUnavailable;
+    BOOL _pyrowaveHdrRejected;
+#endif
 }
 
 - (void)reinitializeDisplayLayer
@@ -97,6 +106,12 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 {
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
+#if TARGET_OS_TV
+    _pyrowaveWidth = videoWidth;
+    _pyrowaveHeight = videoHeight;
+    _pyrowaveUnavailable = NO;
+    _pyrowaveHdrRejected = NO;
+#endif
 }
 
 - (void)start
@@ -143,6 +158,35 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (void)stop
 {
     [_displayLink invalidate];
+#if TARGET_OS_TV
+    if (videoFormat == VIDEO_FORMAT_PYROWAVE) {
+        void (^drain)(void) = ^{
+            [self->_pyrowave stop];
+            self->_pyrowave = nil;
+        };
+        if ([NSThread isMainThread]) drain();
+        else dispatch_sync(dispatch_get_main_queue(), drain);
+    }
+#endif
+}
+
+- (int)submitPyrowaveFrame:(const uint8_t *)bytes length:(size_t)length
+                   ranges:(const PWPacketRange *)ranges count:(size_t)count {
+#if TARGET_OS_TV
+    if (videoFormat != VIDEO_FORMAT_PYROWAVE || _pyrowaveHdrRejected || _pyrowaveUnavailable) return DR_OK;
+    if (!_pyrowave) {
+        _pyrowave = [[PyrowaveLiveRenderer alloc] initWithView:_view width:_pyrowaveWidth
+            height:_pyrowaveHeight callbacks:_callbacks];
+        if (!_pyrowave) {
+            _pyrowaveUnavailable = YES;
+            Log(LOG_E, @"Experimental video renderer initialization failed");
+            return DR_OK;
+        }
+    }
+    // A busy drawable or decoder drops this independent frame. The next IDR can decode alone.
+    [_pyrowave submitFrame:bytes length:length ranges:ranges count:count];
+#endif
+    return DR_OK;
 }
 
 #define NALU_START_PREFIX_SIZE 3
@@ -614,6 +658,14 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 }
 
 - (void)setHdrMode:(BOOL)enabled {
+#if TARGET_OS_TV
+    if (videoFormat == VIDEO_FORMAT_PYROWAVE && enabled) {
+        _pyrowaveHdrRejected = YES;
+        Log(LOG_E, @"Experimental video refused unsupported HDR metadata");
+        dispatch_async(dispatch_get_main_queue(), ^{ [self->_pyrowave stop]; self->_pyrowave = nil; });
+        return;
+    }
+#endif
     SS_HDR_METADATA hdrMetadata;
     
     BOOL hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);

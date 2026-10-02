@@ -50,6 +50,8 @@
     
 #if !TARGET_OS_TV
     UIScreenEdgePanGestureRecognizer *_exitSwipeRecognizer;
+#else
+    BOOL _suspendedExperimentalStream;
 #endif
 }
 
@@ -321,7 +323,12 @@
         [_inactivityTimer invalidate];
     }
     
-#if !TARGET_OS_TV
+#if TARGET_OS_TV
+    if ([_streamMan isExperimentalVideoActive]) {
+        _suspendedExperimentalStream = YES;
+        [_streamMan stopStream];
+    }
+#else
     // Terminate the stream if the app is inactive for 60 seconds
     Log(LOG_I, @"Starting inactivity termination timer");
     _inactivityTimer = [NSTimer scheduledTimerWithTimeInterval:60
@@ -341,6 +348,12 @@
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
+#if TARGET_OS_TV
+    if (_suspendedExperimentalStream) {
+        _suspendedExperimentalStream = NO;
+        [self returnToMainFrame];
+    }
+#endif
     // Stop the background timer, since we're foregrounded again
     if (_inactivityTimer != nil) {
         Log(LOG_I, @"Stopping inactivity timer after becoming active again");

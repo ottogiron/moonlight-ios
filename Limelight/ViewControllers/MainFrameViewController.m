@@ -661,6 +661,13 @@ static NSMutableSet* hostList;
     }
     
     _streamConfig.serverCodecModeSupport = app.host.serverCodecModeSupport;
+#if TARGET_OS_TV
+    _streamConfig.experimentalVideo = streamSettings.experimentalVideo && !streamSettings.enableHdr &&
+        _streamConfig.bitRate >= 13200 &&
+        _streamConfig.frameRate == 60 &&
+        ((_streamConfig.width == 1920 && _streamConfig.height == 1080) ||
+         (_streamConfig.width == 3840 && _streamConfig.height == 2160));
+#endif
     
     switch (streamSettings.preferredCodec) {
         case CODEC_PREF_AV1:

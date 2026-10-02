@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A11A00000000000000000001 /* PyrowaveEnvelope.c in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000001 /* PyrowaveEnvelope.c */; };
+		A11A00000000000000000002 /* PyrowaveEnvelope.c in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000001 /* PyrowaveEnvelope.c */; };
+		A11A00000000000000000003 /* PyrowaveLiveRenderer.mm in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000002 /* PyrowaveLiveRenderer.mm */; };
+		A11A00000000000000000004 /* pyrowave_common.mm in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000003 /* pyrowave_common.mm */; };
+		A11A00000000000000000005 /* pyrowave_decoder.mm in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000004 /* pyrowave_decoder.mm */; };
+		A11A00000000000000000006 /* pyrowave_bitstream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A11B00000000000000000005 /* pyrowave_bitstream.cpp */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -170,6 +176,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A11B00000000000000000001 /* PyrowaveEnvelope.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PyrowaveEnvelope.c; sourceTree = "<group>"; };
+		A11B00000000000000000002 /* PyrowaveLiveRenderer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = PyrowaveLiveRenderer.mm; sourceTree = "<group>"; };
+		A11B00000000000000000003 /* pyrowave_common.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = experiments/pyrowave-tvos/generated/pyrowave-metal/pyrowave_common.mm; sourceTree = SOURCE_ROOT; };
+		A11B00000000000000000004 /* pyrowave_decoder.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = experiments/pyrowave-tvos/generated/pyrowave-metal/pyrowave_decoder.mm; sourceTree = SOURCE_ROOT; };
+		A11B00000000000000000005 /* pyrowave_bitstream.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = experiments/pyrowave-tvos/generated/pyrowave-metal/pyrowave_bitstream.cpp; sourceTree = SOURCE_ROOT; };
+		A11B00000000000000000006 /* PyrowaveEnvelope.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PyrowaveEnvelope.h; sourceTree = "<group>"; };
+		A11B00000000000000000007 /* PyrowaveLiveRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PyrowaveLiveRenderer.h; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
@@ -550,6 +563,13 @@
 				FB89461B19F646E200339C8A /* StreamManager.m */,
 				FB89461C19F646E200339C8A /* VideoDecoderRenderer.h */,
 				FB89461D19F646E200339C8A /* VideoDecoderRenderer.m */,
+				A11B00000000000000000001 /* PyrowaveEnvelope.c */,
+				A11B00000000000000000006 /* PyrowaveEnvelope.h */,
+				A11B00000000000000000002 /* PyrowaveLiveRenderer.mm */,
+				A11B00000000000000000007 /* PyrowaveLiveRenderer.h */,
+				A11B00000000000000000003 /* pyrowave_common.mm */,
+				A11B00000000000000000004 /* pyrowave_decoder.mm */,
+				A11B00000000000000000005 /* pyrowave_bitstream.cpp */,
 				9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */,
 			);
 			path = Stream;
@@ -877,6 +897,11 @@
 				FB1A67A5213245BD00507771 /* StreamConfiguration.m in Sources */,
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
+				A11A00000000000000000001 /* PyrowaveEnvelope.c in Sources */,
+				A11A00000000000000000003 /* PyrowaveLiveRenderer.mm in Sources */,
+				A11A00000000000000000004 /* pyrowave_common.mm in Sources */,
+				A11A00000000000000000005 /* pyrowave_decoder.mm in Sources */,
+				A11A00000000000000000006 /* pyrowave_bitstream.cpp in Sources */,
 				FB1A67A12132458C00507771 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -890,6 +915,7 @@
 				9819CC14254F107A008A7C8E /* RelativeTouchHandler.m in Sources */,
 				FB1A674D2131E65900507771 /* KeyboardSupport.m in Sources */,
 				FB89463219F646E200339C8A /* VideoDecoderRenderer.m in Sources */,
+				A11A00000000000000000002 /* PyrowaveEnvelope.c in Sources */,
 				FB290D0419B2C406004C83CF /* AppDelegate.m in Sources */,
 				FB9AFD401A7E127D00872C98 /* AppListResponse.m in Sources */,
 				FB89463419F646E200339C8A /* Utils.m in Sources */,
@@ -992,8 +1018,11 @@
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+					"$(PROJECT_DIR)/experiments/pyrowave-tvos/generated/pyrowave-metal",
 					"$(SDKROOT)/usr/include/libxml2/**",
-					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/libs/SDL2/include",
+					"$(PROJECT_DIR)/libs/opus/include/opus",
+					"$(PROJECT_DIR)/libs/FFmpeg/include",
 				);
 				INFOPLIST_FILE = "Moonlight TV/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1016,6 +1045,7 @@
 				);
 				MARKETING_VERSION = 9.0.2;
 				MTL_ENABLE_DEBUG_INFO = YES;
+				OTHER_LDFLAGS = ("$(inherited)", "-framework", Metal, "-framework", QuartzCore, "-framework", IOSurface);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ottogiron.moonlight.pyrowave;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -1049,8 +1079,11 @@
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+					"$(PROJECT_DIR)/experiments/pyrowave-tvos/generated/pyrowave-metal",
 					"$(SDKROOT)/usr/include/libxml2/**",
-					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/libs/SDL2/include",
+					"$(PROJECT_DIR)/libs/opus/include/opus",
+					"$(PROJECT_DIR)/libs/FFmpeg/include",
 				);
 				INFOPLIST_FILE = "Moonlight TV/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1073,6 +1106,7 @@
 				);
 				MARKETING_VERSION = 9.0.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_LDFLAGS = ("$(inherited)", "-framework", Metal, "-framework", QuartzCore, "-framework", IOSurface);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ottogiron.moonlight.pyrowave;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;

@@ -1,0 +1,66 @@
+diff --git a/src/Limelight.h b/src/Limelight.h
+index 22bee46..6b23827 100644
+--- a/src/Limelight.h
++++ b/src/Limelight.h
+@@ -234,0 +235 @@ typedef struct _DECODE_UNIT {
++#define VIDEO_FORMAT_PYROWAVE        0x10000 // Apollo experimental, client-local format
+diff --git a/src/RtspConnection.c b/src/RtspConnection.c
+index e958101..d469a9d 100644
+--- a/src/RtspConnection.c
++++ b/src/RtspConnection.c
+@@ -9,0 +10,20 @@ static int currentSeqNumber;
++// Only an exact version and source pin in DESCRIBE may select the experimental codec.
++static bool hasExactPyrowaveAttribute(const char* sdp, const char* name, const char* value) {
++    size_t nameLen = strlen(name), valueLen = strlen(value);
++    int matches = 0;
++    for (const char* line = sdp; *line; ) {
++        const char* end = strchr(line, '\n');
++        if (!end) end = line + strlen(line);
++        const char* trimmed = end;
++        while (trimmed > line && (trimmed[-1] == '\r' || trimmed[-1] == ' ')) trimmed--;
++        if ((size_t)(trimmed - line) >= nameLen + 3 &&
++            line[0] == 'a' && line[1] == '=' &&
++            !memcmp(line + 2, name, nameLen) && line[2 + nameLen] == ':') {
++            if ((size_t)(trimmed - (line + 3 + nameLen)) != valueLen ||
++                memcmp(line + 3 + nameLen, value, valueLen)) return false;
++            matches++;
++        }
++        line = *end ? end + 1 : end;
++    }
++    return matches == 1;
++}
+@@ -1090 +1110,11 @@ int performRtspHandshake(PSERVER_INFORMATION serverInfo) {
+-        if ((StreamConfig.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && strstr(response.payload, "AV1/90000")) {
++        if (IS_SUNSHINE() && AppVersionQuad[0] >= 7 &&
++            (StreamConfig.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE) &&
++            hasExactPyrowaveAttribute(response.payload, "x-apollo-pyrowave-version", "1") &&
++            hasExactPyrowaveAttribute(response.payload, "x-apollo-pyrowave-pin", "89f7e47d4abbf650c91fae766728af866c5e32a0")) {
++            NegotiatedVideoFormat = VIDEO_FORMAT_PYROWAVE;
++            StreamConfig.colorSpace = COLORSPACE_REC_709;
++            StreamConfig.colorRange = COLOR_RANGE_FULL;
++            // The SDP video packet size loses 16 bytes under video encryption.
++            if (StreamConfig.packetSize == 1024) StreamConfig.packetSize = 1040;
++        }
++        else if ((StreamConfig.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && strstr(response.payload, "AV1/90000")) {
+diff --git a/src/SdpGenerator.c b/src/SdpGenerator.c
+index 22467c0..0cb416b 100644
+--- a/src/SdpGenerator.c
++++ b/src/SdpGenerator.c
+@@ -434 +434,7 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
+-        if (NegotiatedVideoFormat & VIDEO_FORMAT_MASK_AV1) {
++        if (NegotiatedVideoFormat == VIDEO_FORMAT_PYROWAVE) {
++            err |= addAttributeString(&optionHead, "x-nv-vqos[0].bitStreamFormat", "3");
++            err |= addAttributeString(&optionHead, "x-apollo-pyrowave-version", "1");
++            err |= addAttributeString(&optionHead, "x-apollo-pyrowave-pin", "89f7e47d4abbf650c91fae766728af866c5e32a0");
++            err |= addAttributeString(&optionHead, "x-ss-video[0].intraRefresh", "0");
++        }
++        else if (NegotiatedVideoFormat & VIDEO_FORMAT_MASK_AV1) {
+diff --git a/src/VideoDepacketizer.c b/src/VideoDepacketizer.c
+index 5baa1d5..9d6827a 100644
+--- a/src/VideoDepacketizer.c
++++ b/src/VideoDepacketizer.c
+@@ -218,2 +218,2 @@ void validateDecodeUnitForPlayback(PDECODE_UNIT decodeUnit) {
+-        else if (NegotiatedVideoFormat & VIDEO_FORMAT_MASK_AV1) {
+-            // We don't parse the AV1 bitstream
++        else if (NegotiatedVideoFormat & (VIDEO_FORMAT_MASK_AV1 | VIDEO_FORMAT_PYROWAVE)) {
++            // These codecs carry opaque picture data without NAL configuration.

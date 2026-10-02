@@ -16,6 +16,9 @@
 #import "HttpResponse.h"
 #import "HttpRequest.h"
 #import "IdManager.h"
+#if TARGET_OS_TV
+#import "PyrowaveLiveRenderer.h"
+#endif
 
 #include <Limelight.h>
 
@@ -79,6 +82,17 @@
     // Populate the config's version fields from serverinfo
     _config.appVersion = appversion;
     _config.gfeVersion = gfeVersion;
+#if TARGET_OS_TV
+    // The serverinfo tags are only an early gate. common-c checks the exact
+    // DESCRIBE attributes again before selecting the experimental format.
+    if (_config.experimentalVideo &&
+        [[[serverInfoResp getStringTag:@"ApolloPyrowaveVersion"] trim] isEqualToString:@"1"] &&
+        [[[serverInfoResp getStringTag:@"ApolloPyrowavePin"] trim]
+         isEqualToString:@"89f7e47d4abbf650c91fae766728af866c5e32a0"] &&
+        PyrowaveLiveDecoderSupported()) {
+        _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
+    }
+#endif
     
     // resumeApp and launchApp handle calling launchFailed
     NSString* sessionUrl;
@@ -109,6 +123,10 @@
 - (void) stopStream
 {
     [_connection terminate];
+}
+
+- (BOOL) isExperimentalVideoActive {
+    return [_connection isExperimentalVideoActive];
 }
 
 - (BOOL) launchApp:(HttpManager*)hMan receiveSessionUrl:(NSString**)sessionUrl {
