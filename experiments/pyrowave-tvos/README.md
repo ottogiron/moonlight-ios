@@ -21,6 +21,7 @@ scripts/stage-fixtures.sh /path/to/fixture-directory
 heavy scripts/build-mac.sh
 python3 scripts/test-fixture-loader.py
 scripts/test-drain.sh
+scripts/test-report.sh
 heavy build/pyrowave-mac-verify Fixtures > build/mac-report.json
 ```
 
@@ -53,8 +54,22 @@ On launch, the app checks all six fixtures twice before starting display. It
 shows fixture names and a pass/fail summary. The default run has 60 warmup
 display callbacks and 3,600 measured callbacks (about 60 seconds at 60 Hz).
 Launch arguments `--warmup N --frames N` cap either count at 3,600. One decode
-and render pair is in flight at a time. The app writes
-`Documents/pyrowave-tv-probe-report.json` and logs its location for collection.
+and render pair is in flight at a time. The app creates `Library/Caches` in its
+data container and writes `Library/Caches/pyrowave-tv-probe-report.json`. Retrieve
+it after an operator-run device launch:
+
+```sh
+xcrun devicectl device copy from --device "$TV_UDID" \
+  --domain-type appDataContainer \
+  --domain-identifier com.ottogiron.moonlight.pyrowave.probe \
+  --source Library/Caches/pyrowave-tv-probe-report.json \
+  --destination ./pyrowave-tv-probe-report.json
+```
+
+The console logs final counters and the complete JSON before attempting the
+write. If a console line is truncated, concatenate the numbered `Pyrowave report
+JSON base64` chunks between `BEGIN` and `END`, then base64-decode them. The TV
+screen reports serialization, directory, and write failures separately.
 
 After the last measured display callback, the app stops submitting frames. It
 finalizes immediately once every submitted measured frame has both a GPU
@@ -64,7 +79,13 @@ that frozen report. `PASS` requires 12/12 Vulkan comparisons, all target display
 callbacks submitted, completed without GPU errors, and observed as presented
 without skips or cadence misses. Busy callbacks and unavailable drawables fail
 that strict 60 Hz result. The report includes pending callbacks and GPU work,
-skipped presentations, the timeout flag, and the observed presentation rate.
+skipped presentations, raw zero or unavailable presentation timestamps, drawable
+ID mismatches, the timeout flag, and the observed presentation rate. A presented
+drawable requires a finite positive timestamp and a matching ID captured in the
+Metal presentation callback. These snapshots record callback-time values; they
+do not establish why the previous device run reported zero timestamps. Unavailable
+timing statistics are JSON `null`, with
+sample and unavailable counts, instead of made-up zero values.
 
 The report separates CPU submission duration, GPU decode and render timestamps
 when valid, display callback cadence, busy/drawable misses, completed command

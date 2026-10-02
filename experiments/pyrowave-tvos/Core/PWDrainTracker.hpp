@@ -1,8 +1,18 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 
 enum class PWDrainOutcome { Waiting, Passed, Failed, TimedOut };
+
+inline bool PWElapsedMilliseconds(double start, double end, double *milliseconds) {
+    if (!std::isfinite(start) || start <= 0 || !std::isfinite(end) || end < start)
+        return false;
+    double elapsed = (end - start) * 1000.0;
+    if (!std::isfinite(elapsed)) return false;
+    *milliseconds = elapsed;
+    return true;
+}
 
 // Main-thread accounting for measured display callbacks only. A submitted
 // frame has exactly one render-command-buffer completion and one drawable
@@ -15,6 +25,9 @@ struct PWDrainTracker {
     uint64_t gpuErrors = 0;
     uint64_t presentationCallbacks = 0;
     uint64_t skippedPresentations = 0;
+    uint64_t zeroPresentationTimes = 0;
+    uint64_t unavailablePresentationTimes = 0;
+    uint64_t drawableIDMismatches = 0;
     bool frozen = false;
 
     void freeze() { frozen = true; }
@@ -25,10 +38,16 @@ struct PWDrainTracker {
         ++completed;
         if (!succeeded) ++gpuErrors;
     }
-    void onPresentation(bool wasPresented) {
-        if (frozen) return;
+    bool onPresentation(double presentedTime, uint64_t drawableID, uint64_t submittedDrawableID) {
+        if (frozen) return false;
         ++presentationCallbacks;
+        if (presentedTime == 0) ++zeroPresentationTimes;
+        else if (!std::isfinite(presentedTime) || presentedTime < 0) ++unavailablePresentationTimes;
+        if (drawableID != submittedDrawableID) ++drawableIDMismatches;
+        bool wasPresented = std::isfinite(presentedTime) && presentedTime > 0 &&
+                            drawableID == submittedDrawableID;
         if (!wasPresented) ++skippedPresentations;
+        return wasPresented;
     }
     uint64_t presented() const { return presentationCallbacks - skippedPresentations; }
     uint64_t pendingCompletions() const { return completed < submitted ? submitted - completed : 0; }

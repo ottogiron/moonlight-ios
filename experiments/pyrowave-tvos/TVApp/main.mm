@@ -1,20 +1,10 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import "PWProbeCore.h"
+#import "PWReportStats.h"
 #include "PWDrainTracker.hpp"
 
 static const NSTimeInterval PWDrainTimeoutSeconds = 3.0;
-
-static double PWMean(NSArray<NSNumber *> *values) {
-    double total = 0;
-    for (NSNumber *n in values) total += n.doubleValue;
-    return values.count ? total / values.count : 0;
-}
-static double PWMax(NSArray<NSNumber *> *values) {
-    double maximum = 0;
-    for (NSNumber *n in values) maximum = MAX(maximum, n.doubleValue);
-    return maximum;
-}
 
 @interface PWMetalView : UIView
 @end
@@ -49,9 +39,9 @@ static double PWMax(NSArray<NSNumber *> *values) {
     _metalView = [[PWMetalView alloc] initWithFrame:self.view.bounds];
     _metalView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:_metalView];
-    _status = [[UILabel alloc] initWithFrame:CGRectMake(60, 50, 1800, 180)];
+    _status = [[UILabel alloc] initWithFrame:CGRectMake(60, 50, 1800, 260)];
     _status.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    _status.numberOfLines = 4;
+    _status.numberOfLines = 5;
     _status.textColor = UIColor.whiteColor;
     _status.backgroundColor = [UIColor colorWithWhite:0 alpha:0.72];
     _status.font = [UIFont monospacedSystemFontOfSize:34 weight:UIFontWeightMedium];
@@ -145,17 +135,23 @@ static double PWMax(NSArray<NSNumber *> *values) {
     _inFlight = YES;
     if (measuring) _drain.onSubmit();
     __weak PWViewController *weakSelf = self;
+    NSUInteger submittedDrawableID = drawable.drawableID;
     [drawable addPresentedHandler:^(id<MTLDrawable> presentedDrawable) {
+        // Preserve the callback's timestamp and ID as one observation before main-queue accounting.
+        CFTimeInterval presentedTime = presentedDrawable.presentedTime;
+        NSUInteger presentedDrawableID = presentedDrawable.drawableID;
         dispatch_async(dispatch_get_main_queue(), ^{
             PWViewController *owner = weakSelf;
             if (!owner || owner->_finished || !measuring) return;
-            owner->_drain.onPresentation(presentedDrawable.presentedTime > 0);
-            if (presentedDrawable.presentedTime > 0) {
-                if (owner->_lastPresentation > 0) {
-                    double interval = presentedDrawable.presentedTime - owner->_lastPresentation;
-                    [owner->_presentIntervals addObject:@(interval * 1000.0)];
-                }
-                owner->_lastPresentation = presentedDrawable.presentedTime;
+            BOOL presented = owner->_drain.onPresentation(presentedTime, presentedDrawableID,
+                                                           submittedDrawableID);
+            if (presented) {
+                double interval;
+                if (PWElapsedMilliseconds(owner->_lastPresentation, presentedTime, &interval))
+                    [owner->_presentIntervals addObject:@(interval)];
+                owner->_lastPresentation = presentedTime;
+            } else {
+                owner->_lastPresentation = 0;
             }
             [owner maybeFinishDrain];
         });
@@ -174,17 +170,22 @@ static double PWMax(NSArray<NSNumber *> *values) {
                 return;
             }
             if (measuring) {
-                if (decode.GPUStartTime > 0 && decode.GPUEndTime >= decode.GPUStartTime)
-                    [owner->_gpuDecode addObject:@((decode.GPUEndTime - decode.GPUStartTime) * 1000.0)];
-                if (buffer.GPUStartTime > 0 && buffer.GPUEndTime >= buffer.GPUStartTime)
-                    [owner->_gpuRender addObject:@((buffer.GPUEndTime - buffer.GPUStartTime) * 1000.0)];
+                double milliseconds;
+                if (PWElapsedMilliseconds(decode.GPUStartTime, decode.GPUEndTime, &milliseconds))
+                    [owner->_gpuDecode addObject:@(milliseconds)];
+                if (PWElapsedMilliseconds(buffer.GPUStartTime, buffer.GPUEndTime, &milliseconds))
+                    [owner->_gpuRender addObject:@(milliseconds)];
             }
             [owner maybeFinishDrain];
         });
     }];
     [decode commit];
     [render commit];
-    if (measuring) [_cpuSubmission addObject:@((CACurrentMediaTime() - cpuStart) * 1000.0)];
+    if (measuring) {
+        double milliseconds;
+        if (PWElapsedMilliseconds(cpuStart, CACurrentMediaTime(), &milliseconds))
+            [_cpuSubmission addObject:@(milliseconds)];
+    }
     if (_ticks % 60 == 0)
         _status.text = [NSString stringWithFormat:@"Pyrowave TV Probe | %@\n12/12 Vulkan comparisons PASS (≤2 LSB)\n%@ %lu/%lu | Presented %lu | Busy %lu",
                         fixture.name, measuring ? @"Measured" : @"Warmup",
@@ -238,13 +239,16 @@ static double PWMax(NSArray<NSNumber *> *values) {
     BOOL passed = _failure == nil && outcome == PWDrainOutcome::Passed;
     if (!passed && !_failure) _failure = @"Measured 60 Hz callback, submission, or presentation criteria failed";
     NSString *summary = passed ? @"PASS" : @"FAIL";
-    double duration = _measureEnd > _measureStart ? _measureEnd - _measureStart + 1.0 / 60.0 : 0;
+    double duration = std::isfinite(_measureStart) && _measureStart > 0 &&
+                      std::isfinite(_measureEnd) && _measureEnd >= _measureStart
+                          ? _measureEnd - _measureStart + 1.0 / 60.0 : NAN;
+    if (!std::isfinite(duration) || duration <= 0) duration = NAN;
+    double presentedFPS = _drain.presented() / duration;
+    if (!std::isfinite(presentedFPS)) presentedFPS = NAN;
     uint64_t missed = _busyTicks + _noDrawableTicks + _cadenceMisses +
                       _drain.skippedPresentations + _drain.pendingPresentations();
-    NSDictionary *report = @{
-        @"schema_version": @1, @"program": @"Pyrowave TV Probe", @"passed": @(passed),
-        @"failure": _failure ?: @"", @"pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
-        @"tolerance_lsb": @2, @"validation": _checks ?: @[],
+    NSDictionary *counters = @{
+        @"validation_passes": @(validationPasses),
         @"warmup_callback_target": @(_warmup), @"warmup_callbacks_observed": @(MIN(_ticks, _warmup)),
         @"measured_callback_target": @(_measured),
         @"measured_callbacks": @(_drain.callbacks), @"submitted_frames": @(_drain.submitted),
@@ -252,6 +256,9 @@ static double PWMax(NSArray<NSNumber *> *values) {
         @"presentation_callbacks": @(_drain.presentationCallbacks),
         @"presented_drawables": @(_drain.presented()),
         @"skipped_presentations": @(_drain.skippedPresentations),
+        @"presented_time_zero": @(_drain.zeroPresentationTimes),
+        @"presented_time_unavailable": @(_drain.unavailablePresentationTimes),
+        @"drawable_id_mismatches": @(_drain.drawableIDMismatches),
         @"unpresented_pending_callbacks": @(_drain.pendingPresentations()),
         @"pending_gpu_completions": @(_drain.pendingCompletions()),
         @"callback_accounting_complete": @(_drain.callbacks == _drain.target &&
@@ -260,25 +267,68 @@ static double PWMax(NSArray<NSNumber *> *values) {
         @"busy_callbacks": @(_busyTicks),
         @"no_drawable_callbacks": @(_noDrawableTicks), @"cadence_missed_estimate": @(_cadenceMisses),
         @"missed_frame_estimate": @(missed),
-        @"measured_duration_seconds": @(duration),
-        @"observed_presented_fps": @(duration > 0 ? _drain.presented() / duration : 0),
-        @"cpu_submission_ms": @{ @"samples": @(_cpuSubmission.count), @"mean": @(PWMean(_cpuSubmission)), @"max": @(PWMax(_cpuSubmission)) },
-        @"gpu_decode_ms": @{ @"samples": @(_gpuDecode.count), @"mean": @(PWMean(_gpuDecode)), @"max": @(PWMax(_gpuDecode)) },
-        @"gpu_render_ms": @{ @"samples": @(_gpuRender.count), @"mean": @(PWMean(_gpuRender)), @"max": @(PWMax(_gpuRender)) },
-        @"presented_interval_ms": @{ @"samples": @(_presentIntervals.count), @"mean": @(PWMean(_presentIntervals)), @"max": @(PWMax(_presentIntervals)) }
+        @"measured_duration_seconds": std::isfinite(duration) ? @(duration) : NSNull.null,
+        @"observed_presented_fps": std::isfinite(presentedFPS) ? @(presentedFPS) : NSNull.null
     };
+    NSMutableDictionary *report = [counters mutableCopy];
+    [report addEntriesFromDictionary:@{
+        @"schema_version": @1, @"program": @"Pyrowave TV Probe", @"passed": @(passed),
+        @"failure": _failure ?: @"", @"pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
+        @"tolerance_lsb": @2, @"validation": _checks ?: @[],
+        @"cpu_submission_ms": PWStats(_cpuSubmission, _drain.submitted, 0),
+        @"gpu_decode_ms": PWStats(_gpuDecode, _drain.submitted, _drain.pendingCompletions()),
+        @"gpu_render_ms": PWStats(_gpuRender, _drain.submitted, _drain.pendingCompletions()),
+        @"presented_interval_ms": PWStats(_presentIntervals,
+                                          _drain.presentationCallbacks > 0 ? _drain.presentationCallbacks - 1 : 0, 0)
+    }];
     NSError *error = nil;
-    NSData *json = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:&error];
-    NSURL *documents = [NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
-    NSURL *output = [documents URLByAppendingPathComponent:@"pyrowave-tv-probe-report.json"];
-    if (![json writeToURL:output options:NSDataWritingAtomic error:&error]) NSLog(@"Pyrowave report write FAILED: %@", error);
-    else NSLog(@"Pyrowave report %@: %@", summary, output.path);
-    _status.text = [NSString stringWithFormat:@"Pyrowave TV Probe: %@\n%lu/12 Vulkan comparisons PASS (≤2 LSB)\n%lu/%lu presented (%.1f/s) | %lu missed estimate\n%@",
+    NSData *counterJSON = [NSJSONSerialization dataWithJSONObject:counters options:NSJSONWritingSortedKeys error:&error];
+    if (counterJSON) NSLog(@"Pyrowave final counters JSON: %@", [[NSString alloc] initWithData:counterJSON encoding:NSUTF8StringEncoding]);
+    else NSLog(@"Pyrowave final counters serialization FAILED: %@", error);
+
+    error = nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingSortedKeys error:&error];
+    NSString *reportStatus;
+    if (!json) {
+        NSLog(@"Pyrowave report serialization FAILED: %@", error);
+        reportStatus = [NSString stringWithFormat:@"Report serialization FAILED: %@", error.localizedDescription];
+    } else {
+        NSLog(@"Pyrowave report JSON: %@", [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding]);
+        // Bounded lines survive console line limits; concatenate and base64-decode to recover the JSON.
+        NSString *encoded = [json base64EncodedStringWithOptions:0];
+        NSUInteger chunks = (encoded.length + 767) / 768;
+        NSLog(@"Pyrowave report JSON base64 BEGIN bytes=%lu chunks=%lu", (unsigned long)json.length, (unsigned long)chunks);
+        for (NSUInteger i = 0; i < chunks; ++i) {
+            NSString *part = [encoded substringWithRange:NSMakeRange(i * 768, MIN(768, encoded.length - i * 768))];
+            NSLog(@"Pyrowave report JSON base64 %lu/%lu: %@", (unsigned long)(i + 1), (unsigned long)chunks, part);
+        }
+        NSLog(@"Pyrowave report JSON base64 END");
+
+        NSURL *caches = [NSFileManager.defaultManager URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask].firstObject;
+        if (!caches) {
+            reportStatus = @"Report directory FAILED: Library/Caches unavailable";
+            NSLog(@"Pyrowave %@", reportStatus);
+        } else if (![NSFileManager.defaultManager createDirectoryAtURL:caches withIntermediateDirectories:YES attributes:nil error:&error]) {
+            NSLog(@"Pyrowave report directory FAILED: %@", error);
+            reportStatus = [NSString stringWithFormat:@"Report directory FAILED: %@", error.localizedDescription];
+        } else {
+            NSURL *output = [caches URLByAppendingPathComponent:@"pyrowave-tv-probe-report.json"];
+            error = nil;
+            if (![json writeToURL:output options:NSDataWritingAtomic error:&error]) {
+                NSLog(@"Pyrowave report write FAILED: %@", error);
+                reportStatus = [NSString stringWithFormat:@"Report write FAILED: %@", error.localizedDescription];
+            } else {
+                NSLog(@"Pyrowave report %@ saved: %@", summary, output.path);
+                reportStatus = @"Report saved: Library/Caches/pyrowave-tv-probe-report.json";
+            }
+        }
+    }
+    _status.text = [NSString stringWithFormat:@"Pyrowave TV Probe: %@\n%lu/12 Vulkan comparisons PASS (≤2 LSB)\n%lu/%lu presented (%@/s) | %lu missed estimate\nResult: %@\n%@",
                     summary, (unsigned long)validationPasses,
                     (unsigned long)_drain.presented(), (unsigned long)_drain.callbacks,
-                    duration > 0 ? _drain.presented() / duration : 0,
+                    std::isfinite(presentedFPS) ? [NSString stringWithFormat:@"%.1f", presentedFPS] : @"unavailable",
                     (unsigned long)missed,
-                    _failure ?: @"Report saved in Documents/pyrowave-tv-probe-report.json"];
+                    _failure ?: @"Measured criteria PASS", reportStatus];
 }
 @end
 
