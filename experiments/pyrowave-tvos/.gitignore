@@ -1,0 +1,7 @@
+/generated/
+/Fixtures/*
+!/Fixtures/.keep
+/DerivedData/
+/build/
+*.xcuserstate
+xcuserdata/
