@@ -44,9 +44,12 @@ enable automatic signing in **Signing & Capabilities** and choose your own
 the app overrides the shared project's upstream team. Keep account credentials
 and local team selections out of committed changes.
 
-Pair the Apple TV in Xcode's **Devices and Simulators** window on the same
-network, select it as the run destination, and run. For a signed CLI build,
-replace these placeholders with your local team and paired device IDs:
+Pair the Apple TV on the same network. In Xcode 27, open **Xcode > Open
+Developer Tool > Device Hub**, then choose **+ > Pair Nearby Device** and
+**Apple TV**; earlier Xcode versions use **Devices and Simulators**. Follow
+[Apple's pairing instructions](https://developer.apple.com/documentation/xcode/pairing-your-devices-with-your-mac),
+select the TV as the run destination, and run. For a signed CLI build, replace
+these placeholders with your local team and paired device IDs:
 
 ```sh
 TVOS_TEAM_ID='YOUR_TEAM_ID'
