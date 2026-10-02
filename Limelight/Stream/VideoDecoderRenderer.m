@@ -10,6 +10,7 @@
 #import "StreamView.h"
 #if TARGET_OS_TV
 #import "PyrowaveLiveRenderer.h"
+#import "PyrowaveRendererGate.h"
 #endif
 
 #include <libavcodec/avcodec.h>
@@ -21,6 +22,21 @@
 // Private libavformat API for writing the AV1 Codec Configuration Box
 extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
                               int write_seq_header);
+
+#if TARGET_OS_TV
+@interface VideoDecoderRenderer ()
+- (BOOL)initializePyrowaveRenderer;
+- (void)reportPyrowaveInitializationFailure;
+@end
+
+static bool PWInitializeLiveRenderer(void *context) {
+    return [(__bridge VideoDecoderRenderer *)context initializePyrowaveRenderer];
+}
+
+static void PWReportLiveRendererFailure(void *context) {
+    [(__bridge VideoDecoderRenderer *)context reportPyrowaveInitializationFailure];
+}
+#endif
 
 @implementation VideoDecoderRenderer {
     StreamView* _view;
@@ -41,7 +57,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 #if TARGET_OS_TV
     PyrowaveLiveRenderer *_pyrowave;
     int _pyrowaveWidth, _pyrowaveHeight;
-    BOOL _pyrowaveUnavailable;
+    PWRendererState _pyrowaveState;
     BOOL _pyrowaveHdrRejected;
 #endif
 }
@@ -109,7 +125,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 #if TARGET_OS_TV
     _pyrowaveWidth = videoWidth;
     _pyrowaveHeight = videoHeight;
-    _pyrowaveUnavailable = NO;
+    _pyrowaveState = PW_RENDERER_PENDING;
     _pyrowaveHdrRejected = NO;
 #endif
 }
@@ -136,6 +152,10 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     while (LiPollNextVideoFrame(&handle, &du)) {
         LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+#if TARGET_OS_TV
+        // Yield the main run loop so the queued error alert and session stop run.
+        if (videoFormat == VIDEO_FORMAT_PYROWAVE && _pyrowaveState == PW_RENDERER_FAILED) break;
+#endif
         
         if (framePacing) {
             // Calculate the actual display refresh rate
@@ -173,21 +193,27 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (int)submitPyrowaveFrame:(const uint8_t *)bytes length:(size_t)length
                    ranges:(const PWPacketRange *)ranges count:(size_t)count {
 #if TARGET_OS_TV
-    if (videoFormat != VIDEO_FORMAT_PYROWAVE || _pyrowaveHdrRejected || _pyrowaveUnavailable) return DR_OK;
-    if (!_pyrowave) {
-        _pyrowave = [[PyrowaveLiveRenderer alloc] initWithView:_view width:_pyrowaveWidth
-            height:_pyrowaveHeight callbacks:_callbacks];
-        if (!_pyrowave) {
-            _pyrowaveUnavailable = YES;
-            Log(LOG_E, @"Experimental video renderer initialization failed");
-            return DR_OK;
-        }
-    }
+    if (videoFormat != VIDEO_FORMAT_PYROWAVE || _pyrowaveHdrRejected) return DR_OK;
+    if (!PWEnsureRenderer(&_pyrowaveState, PWInitializeLiveRenderer,
+                          PWReportLiveRendererFailure, (__bridge void *)self)) return DR_OK;
     // A busy drawable or decoder drops this independent frame. The next IDR can decode alone.
     [_pyrowave submitFrame:bytes length:length ranges:ranges count:count];
 #endif
     return DR_OK;
 }
+
+#if TARGET_OS_TV
+- (BOOL)initializePyrowaveRenderer {
+    _pyrowave = [[PyrowaveLiveRenderer alloc] initWithView:_view width:_pyrowaveWidth
+        height:_pyrowaveHeight callbacks:_callbacks];
+    return _pyrowave != nil;
+}
+
+- (void)reportPyrowaveInitializationFailure {
+    Log(LOG_E, @"Experimental video renderer initialization failed; ending selected connection");
+    [_callbacks experimentalVideoFailed];
+}
+#endif
 
 #define NALU_START_PREFIX_SIZE 3
 #define NAL_LENGTH_PREFIX_SIZE 4

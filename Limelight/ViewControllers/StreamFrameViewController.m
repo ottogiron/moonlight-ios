@@ -46,6 +46,7 @@
     StreamView *_streamView;
     UIScrollView *_scrollView;
     BOOL _userIsInteracting;
+    BOOL _experimentalVideoFailureShown;
     CGSize _keyboardSize;
     
 #if !TARGET_OS_TV
@@ -409,6 +410,7 @@
     unsigned int portTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_experimentalVideoFailureShown) return;
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         
@@ -481,6 +483,22 @@
     });
 
     [_streamMan stopStream];
+}
+
+- (void)experimentalVideoFailed {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_experimentalVideoFailureShown) return;
+        self->_experimentalVideoFailureShown = YES;
+        [UIApplication sharedApplication].idleTimerDisabled = NO;
+
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Connection Error"
+            message:@"Experimental video could not start. Turn off Experimental Video to use standard streaming."
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault
+            handler:^(UIAlertAction *action) { [self returnToMainFrame]; }]];
+        [self presentViewController:alert animated:YES completion:nil];
+        [self->_streamMan stopStream];
+    });
 }
 
 - (void) stageStarting:(const char*)stageName {

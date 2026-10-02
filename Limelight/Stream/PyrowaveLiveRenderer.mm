@@ -3,7 +3,9 @@
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <math.h>
 #import "pyrowave_metal.h"
+#import "PyrowaveDrawableSize.h"
 
 BOOL PyrowaveLiveDecoderSupported(void) {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
@@ -54,6 +56,11 @@ fragment float4 pwLiveFragment(Out in [[stage_in]],
     BOOL _stopped;
     BOOL _contentShown;
     NSUInteger _width, _height;
+    NSUInteger _requestedDrawableWidth, _requestedDrawableHeight;
+    NSUInteger _nativeDisplayWidth, _nativeDisplayHeight;
+    NSUInteger _reportedDrawableWidth, _reportedDrawableHeight;
+    NSUInteger _reportedRequestedWidth, _reportedRequestedHeight;
+    NSUInteger _reportedNativeWidth, _reportedNativeHeight;
 }
 
 - (instancetype)initWithView:(UIView *)view width:(NSUInteger)width height:(NSUInteger)height
@@ -102,29 +109,62 @@ fragment float4 pwLiveFragment(Out in [[stage_in]],
     _layer.framebufferOnly = YES;
     _layer.opaque = YES;
     _layer.hidden = YES;
-    [self updateLayerSize];
+    if (![self updateLayerSize]) return nil;
     [_view.layer addSublayer:_layer];
     return self;
 }
 
-- (void)updateLayerSize {
+- (BOOL)updateLayerSize {
     CGFloat aspect = (CGFloat)_width / _height;
     CGRect bounds = _view.bounds;
     CGFloat h = MIN(bounds.size.height, bounds.size.width / aspect);
     CGFloat w = h * aspect;
     _layer.frame = CGRectMake((bounds.size.width - w) / 2, (bounds.size.height - h) / 2, w, h);
-    CGFloat scale = UIScreen.mainScreen.scale;
-    _layer.contentsScale = scale;
-    _layer.drawableSize = CGSizeMake(w * scale, h * scale);
+    UIScreen *screen = _view.window.screen ?: UIScreen.mainScreen;
+    // UIKit's logical scale may be lower than the physical output resolution on tvOS.
+    CGFloat nativeScale = screen.nativeScale;
+    _nativeDisplayWidth = (NSUInteger)llround(screen.nativeBounds.size.width);
+    _nativeDisplayHeight = (NSUInteger)llround(screen.nativeBounds.size.height);
+    size_t targetWidth, targetHeight;
+    if (!PWNativeDrawableSize(w, h, nativeScale, _nativeDisplayWidth,
+                              _nativeDisplayHeight, &targetWidth, &targetHeight)) return NO;
+    _requestedDrawableWidth = targetWidth;
+    _requestedDrawableHeight = targetHeight;
+    _layer.contentsScale = nativeScale;
+    _layer.drawableSize = CGSizeMake(_requestedDrawableWidth, _requestedDrawableHeight);
+    return YES;
 }
 
 - (BOOL)submitFrame:(const uint8_t *)bytes length:(size_t)length
              ranges:(const PWPacketRange *)ranges count:(size_t)count {
     if (_stopped || _inFlight || !bytes || !ranges || !count || count > PW_MAX_PACKETS) return NO;
-    [self updateLayerSize];
+    if (![self updateLayerSize]) return NO;
     id<CAMetalDrawable> drawable = [_layer nextDrawable];
     id<MTLCommandBuffer> command = [_queue commandBuffer];
     if (!drawable || !command) return NO;
+    NSUInteger actualWidth = drawable.texture.width;
+    NSUInteger actualHeight = drawable.texture.height;
+    if (!actualWidth || !actualHeight) return NO;
+    if (actualWidth != _reportedDrawableWidth || actualHeight != _reportedDrawableHeight ||
+        _requestedDrawableWidth != _reportedRequestedWidth ||
+        _requestedDrawableHeight != _reportedRequestedHeight ||
+        _nativeDisplayWidth != _reportedNativeWidth ||
+        _nativeDisplayHeight != _reportedNativeHeight) {
+        NSLog(@"Experimental video: decoded %lux%lu, display native %lux%lu, requested drawable %lux%lu, actual drawable %lux%lu%@%@",
+              (unsigned long)_width, (unsigned long)_height,
+              (unsigned long)_nativeDisplayWidth, (unsigned long)_nativeDisplayHeight,
+              (unsigned long)_requestedDrawableWidth, (unsigned long)_requestedDrawableHeight,
+              (unsigned long)actualWidth, (unsigned long)actualHeight,
+              actualWidth != _requestedDrawableWidth || actualHeight != _requestedDrawableHeight ?
+                  @" (differs from request)" : @"",
+              actualWidth < _width || actualHeight < _height ? @" (scaled to output)" : @"");
+        _reportedDrawableWidth = actualWidth;
+        _reportedDrawableHeight = actualHeight;
+        _reportedRequestedWidth = _requestedDrawableWidth;
+        _reportedRequestedHeight = _requestedDrawableHeight;
+        _reportedNativeWidth = _nativeDisplayWidth;
+        _reportedNativeHeight = _nativeDisplayHeight;
+    }
     pyrowave_decoder_clear(_decoder);
     for (size_t i = 0; i < count; ++i) {
         if (ranges[i].offset > length || ranges[i].length > length - ranges[i].offset ||

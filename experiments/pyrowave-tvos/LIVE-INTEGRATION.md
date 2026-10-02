@@ -48,6 +48,12 @@ heavy xcodebuild -project Moonlight.xcodeproj -scheme 'Moonlight TV' \
 cc -std=c11 -Wall -Wextra -Werror Limelight/Stream/PyrowaveEnvelope.c \
   experiments/pyrowave-tvos/tests/envelope.c -o experiments/pyrowave-tvos/build/envelope
 experiments/pyrowave-tvos/build/envelope
+cc -std=c11 -DDEBUG=1 -Wall -Wextra -Werror \
+  experiments/pyrowave-tvos/tests/renderer-gate.c -o experiments/pyrowave-tvos/build/renderer-gate
+experiments/pyrowave-tvos/build/renderer-gate
+cc -std=c11 -Wall -Wextra -Werror \
+  experiments/pyrowave-tvos/tests/drawable-size.c -o experiments/pyrowave-tvos/build/drawable-size
+experiments/pyrowave-tvos/build/drawable-size
 ```
 
 The parser accepts one complete decode unit only after checking its header,
@@ -61,13 +67,17 @@ remains unchanged.
 
 ## Current contract limits
 
-The host contract currently lists 1920×1080 output. Its requested expansion
-to 3840×2160 keeps version 1 and color profile 1; the client allocates the
-negotiated 1080p or 4K dimensions now. A 1080p60 live session is the first
-smoke test, followed by 4K60 once the host accepts it. The pinned Metal
-decoder accepts even 4:2:0 dimensions and its allocation path has no 1080p
-cap. Build success does not establish 4K quality, bandwidth or physical TV
-playback. Current host capture at 2560×1440 can initially be scaled.
+Apollo `992255f1499b0d4562623a84b1b6f1999d254b12` accepts 1920×1080
+or 3840×2160 at 60 fps SDR. Both sizes use the same version 1 big-endian
+envelope, profile 1, 1 MiB frame cap, 1024 packet cap and 1200-byte record cap.
+The client allocates the negotiated dimensions. Smoke-test 1080p60 first,
+then validate 4K60 on a 4K output: confirm the live log records a 3840×2160
+**actual drawable texture**, sustained presentation, bandwidth and image
+quality. On lower-resolution displays the requested drawable is limited by
+the native mode, and the log records the actual size used for scaling.
+Current 2560×1440 host capture means
+initial 4K output is scaled capture, not native 4K detail. Unsigned builds
+do not establish physical TV playback, 4K quality or latency benefit.
 
 Profile 1 is **full-range BT.709 matrix, center-sited 4:2:0 SDR** with
 nonlinear sRGB input/output. The live shader uses the full-range transform;
@@ -82,3 +92,10 @@ It neither displays unsupported HDR as SDR nor labels 10-bit SDR as HDR.
 There is no automatic retry after a selected Pyrowave ANNOUNCE failure. Turning
 the setting off restores a conventional connection; missing capability already
 selects conventional negotiation in the same attempt.
+
+In Debug builds, `MOONLIGHT_PYROWAVE_FORCE_INIT_FAILURE=1` forces the actual
+renderer initialization gate to fail once so the connection-error and teardown
+path can be checked on a device later. The focused C check exercises this same
+gate's one-shot failure and healthy initialization decisions; it does not
+replace a live UI or drawable-size check. Selected-session renderer failure
+ends the session with an error. There is no automatic reconnect loop.
