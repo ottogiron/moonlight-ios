@@ -128,6 +128,9 @@ static void testBitrateCaps(void) {
     size_t cap200 = PWFrameCapForBitrate(200000, 60);
     assert(cap100 == 212462 && cap150 == 316628 && cap200 == 420795);
     assert(cap100 < cap150 && cap150 < cap200);
+    assert(PWFrameCapForBitrate(300000, 60) == 629128);
+    assert(PWFrameCapForBitrate(500000, 60) == 1045795);
+    assert(PWFrameCapForBitrate(500000, 60) < PW_MAX_FRAME_BYTES);
     assert(PWFrameCapForBitrate(0, 60) == 0);
     assert(PWFrameCapForBitrate(-1, 60) == 0);
     assert(PWFrameCapForBitrate(100000, 0) == 0);

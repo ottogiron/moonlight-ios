@@ -38,6 +38,7 @@ static int activeVideoFormat;
 static uint32_t lastPyrowaveFrame;
 static int pyrowaveWidth, pyrowaveHeight;
 static size_t pyrowaveFrameCap;
+static BOOL pyrowaveBitrateRequired;
 static video_stats_t currentVideoStats;
 static video_stats_t lastVideoStats;
 static NSLock* videoStatsLock;
@@ -366,6 +367,16 @@ void ClStageComplete(int stage)
 
 void ClStageFailed(int stage, int errorCode)
 {
+    if (stage == STAGE_RTSP_HANDSHAKE && errorCode == ML_ERROR_PYROWAVE_REQUIRED) {
+        [_callbacks launchFailed:@"The selected Pyrowave Bitrate needs an updated Apollo host with matching Pyrowave support. The standard codec was not started."];
+        return;
+    }
+    if (stage == STAGE_RTSP_HANDSHAKE && pyrowaveBitrateRequired &&
+        errorCode >= 400 && errorCode <= 599) {
+        [_callbacks launchFailed:[NSString stringWithFormat:
+            @"The host rejected the selected Pyrowave Bitrate during RTSP setup (HTTP %d). Update Apollo or lower Pyrowave Bitrate.", errorCode]];
+        return;
+    }
     [_callbacks stageFailed:LiGetStageName(stage) withError:errorCode portTestFlags:LiGetPortFlagsFromStage(stage)];
 }
 
@@ -497,6 +508,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.height = config.height;
     _streamConfig.fps = config.frameRate;
     _streamConfig.bitrate = config.bitRate;
+    pyrowaveBitrateRequired = (config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE_REQUIRED) != 0;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     if (config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE) {
         pyrowaveFrameCap = PWFrameCapForBitrate(config.bitRate, config.frameRate);

@@ -13,6 +13,7 @@
 @property (nonatomic, retain) Settings * parent;
 
 @property (nonatomic, retain) NSNumber * bitrate;
+@property (nonatomic) int pyrowaveBitrateKbps;
 @property (nonatomic, retain) NSNumber * framerate;
 @property (nonatomic, retain) NSNumber * height;
 @property (nonatomic, retain) NSNumber * width;

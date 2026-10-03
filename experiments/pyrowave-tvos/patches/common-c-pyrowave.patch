@@ -1,11 +1,13 @@
 diff --git a/src/Limelight.h b/src/Limelight.h
-index 22bee46..6b23827 100644
+index 22bee46..da30752 100644
 --- a/src/Limelight.h
 +++ b/src/Limelight.h
-@@ -234,0 +235 @@ typedef struct _DECODE_UNIT {
+@@ -234,0 +235,3 @@ typedef struct _DECODE_UNIT {
 +#define VIDEO_FORMAT_PYROWAVE        0x10000 // Apollo experimental, client-local format
++#define VIDEO_FORMAT_PYROWAVE_REQUIRED 0x20000 // Fail instead of selecting a conventional codec
++#define ML_ERROR_PYROWAVE_REQUIRED   -16000 // Selected Pyrowave was absent from RTSP DESCRIBE
 diff --git a/src/RtspConnection.c b/src/RtspConnection.c
-index e958101..fce5865 100644
+index e958101..4ce6748 100644
 --- a/src/RtspConnection.c
 +++ b/src/RtspConnection.c
 @@ -9,0 +10,20 @@ static int currentSeqNumber;
@@ -29,7 +31,7 @@ index e958101..fce5865 100644
 +    }
 +    return matches == 1;
 +}
-@@ -1090 +1110,11 @@ int performRtspHandshake(PSERVER_INFORMATION serverInfo) {
+@@ -1090 +1110,17 @@ int performRtspHandshake(PSERVER_INFORMATION serverInfo) {
 -        if ((StreamConfig.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && strstr(response.payload, "AV1/90000")) {
 +        if (IS_SUNSHINE() && AppVersionQuad[0] >= 7 &&
 +            (StreamConfig.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE) &&
@@ -41,12 +43,31 @@ index e958101..fce5865 100644
 +            // The SDP video packet size loses 16 bytes under video encryption.
 +            if (StreamConfig.packetSize == 1024) StreamConfig.packetSize = 1040;
 +        }
++        else if (StreamConfig.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE_REQUIRED) {
++            Limelog("Selected Pyrowave bitrate requires matching RTSP capability; refusing codec fallback\n");
++            freeMessage(&response);
++            ret = ML_ERROR_PYROWAVE_REQUIRED;
++            goto Exit;
++        }
 +        else if ((StreamConfig.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && strstr(response.payload, "AV1/90000")) {
 diff --git a/src/SdpGenerator.c b/src/SdpGenerator.c
-index 22467c0..aa30424 100644
+index 22467c0..9d2217f 100644
 --- a/src/SdpGenerator.c
 +++ b/src/SdpGenerator.c
-@@ -434 +434,7 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
+@@ -352,4 +352,8 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
+-    // GFE currently imposes a limit of 100 Mbps for the video bitrate. It will automatically
+-    // impose that on maximumBitrateKbps but not on initialBitrateKbps. We will impose the cap
+-    // ourselves so initialBitrateKbps does not exceed maximumBitrateKbps.
+-    adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
++    // GFE currently imposes a limit of 100 Mbps for the video bitrate. Keep
++    // the historical cap, including Pyrowave's no-override/150 Mbps path.
++    // Higher explicitly selected Pyrowave rates need the matching RTSP request.
++    if (NegotiatedVideoFormat != VIDEO_FORMAT_PYROWAVE ||
++        !(StreamConfig.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE_REQUIRED) ||
++        StreamConfig.bitrate <= 150000) {
++        adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
++    }
+@@ -434 +438,7 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
 -        if (NegotiatedVideoFormat & VIDEO_FORMAT_MASK_AV1) {
 +        if (NegotiatedVideoFormat == VIDEO_FORMAT_PYROWAVE) {
 +            err |= addAttributeString(&optionHead, "x-nv-vqos[0].bitStreamFormat", "3");

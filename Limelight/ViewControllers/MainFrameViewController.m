@@ -12,6 +12,7 @@
 #import "HttpManager.h"
 #import "Connection.h"
 #import "PyrowaveEnvelope.h"
+#import "../Stream/PyrowaveBitratePolicy.h"
 #import "StreamManager.h"
 #import "Utils.h"
 #import "UIComputerView.h"
@@ -663,8 +664,10 @@ static NSMutableSet* hostList;
     
     _streamConfig.serverCodecModeSupport = app.host.serverCodecModeSupport;
 #if TARGET_OS_TV
+    _streamConfig.pyrowaveBitrateKbps = streamSettings.pyrowaveBitrateKbps;
     _streamConfig.experimentalVideo = streamSettings.experimentalVideo && !streamSettings.enableHdr &&
-        _streamConfig.bitRate >= 13200 &&
+        PWRequestedBitrateKbps(_streamConfig.bitRate, _streamConfig.pyrowaveBitrateKbps,
+                               streamSettings.experimentalVideo) >= 13200 &&
         _streamConfig.frameRate == 60 &&
         PWLiveDimensionsSupported(_streamConfig.width, _streamConfig.height);
 #endif

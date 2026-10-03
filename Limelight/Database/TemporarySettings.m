@@ -8,6 +8,7 @@
 
 #import "TemporarySettings.h"
 #import "OnScreenControls.h"
+#import "../Stream/PyrowaveBitratePolicy.h"
 
 @implementation TemporarySettings
 
@@ -32,6 +33,10 @@
     
     self.bitrate = [NSNumber numberWithInteger:[[NSUserDefaults standardUserDefaults] integerForKey:@"bitrate"]];
     assert([self.bitrate intValue] != 0);
+    id pyrowaveBitrate = [[NSUserDefaults standardUserDefaults] objectForKey:@"pyrowaveBitrate"];
+    self.pyrowaveBitrateKbps = [pyrowaveBitrate isKindOfClass:[NSString class]] ?
+        PWBitrateOverrideKbps([(NSString*)pyrowaveBitrate UTF8String],
+                              [(NSString*)pyrowaveBitrate lengthOfBytesUsingEncoding:NSUTF8StringEncoding]) : 0;
     self.framerate = [NSNumber numberWithInteger:[[NSUserDefaults standardUserDefaults] integerForKey:@"framerate"]];
     assert([self.framerate intValue] != 0);
     self.audioConfig = [NSNumber numberWithInteger:[[NSUserDefaults standardUserDefaults] integerForKey:@"audioConfig"]];

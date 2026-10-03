@@ -20,6 +20,7 @@
 @property int height;
 @property int frameRate;
 @property int bitRate;
+@property int pyrowaveBitrateKbps;
 @property int riKeyId;
 @property NSData* riKey;
 @property int gamepadMask;

@@ -11,6 +11,28 @@ conventional negotiation. Only selected sessions
 send ANNOUNCE format `3` and the version/pin selection attributes. They keep
 Moonlight's audio, input, encryption, RTP, FEC and loss recovery paths.
 
+tvOS also offers **Pyrowave Bitrate**: **Use Video Bitrate** (the default), or
+150, 200, 250, 300, 400, and 500 Mbps. Values are stored as Kbps and accepted
+only when they exactly match one of those choices. Invalid persisted values
+behave as the default. The chosen value stays saved while Experimental Video is
+off. It affects only an eligible Pyrowave request to a host advertising the
+exact version and pin; HEVC, H.264, and AV1 retain **Video Bitrate**. An
+explicit override requires Pyrowave selection at RTSP DESCRIBE. If the host
+does not advertise the matching capability or rejects launch/RTSP setup, the
+client shows an error rather than streaming a conventional codec at the
+Pyrowave rate. High choices require the updated Apollo host and are intended
+for wired networking.
+
+The selected Kbps value reaches both common-c's stream configuration and the
+Sunshine `x-ml-video.configuredBitrateKbps` RTSP attribute. The legacy RTSP
+initial/maximum fields retain their existing FEC discount and 100 Mbps cap for
+ordinary sessions and for Pyrowave at 150 Mbps or with no override. Explicit
+Pyrowave choices above 150 Mbps bypass that cap; the configured attribute is
+not discounted a second time. The selected bitrate is a transport budget that
+includes error correction. Actual codec payload may be lower because of FEC,
+encoder rate control, and scene content. This change makes no promise of HEVC
+image quality parity or lower latency.
+
 ## Prepare a clean checkout
 
 The tracked common-c gitlink stays at `f900dd4767759c7b9d0e93bcea666b55c69ea62f`.
@@ -75,11 +97,15 @@ destination; no TV installation is part of this step.
 heavy xcodebuild -project Moonlight.xcodeproj -scheme 'Moonlight TV' \
   -configuration Debug -sdk appletvos -destination 'generic/platform=tvOS' \
   -derivedDataPath experiments/pyrowave-tvos/build/DerivedData-live \
-  CODE_SIGNING_ALLOWED=NO build
+  CODE_SIGNING_ALLOWED=NO -jobs 4 build
 heavy xcodebuild -project Moonlight.xcodeproj -scheme 'Moonlight TV' \
   -configuration Release -sdk appletvos -destination 'generic/platform=tvOS' \
   -derivedDataPath experiments/pyrowave-tvos/build/DerivedData-live \
-  CODE_SIGNING_ALLOWED=NO build
+  CODE_SIGNING_ALLOWED=NO -jobs 4 build
+cc -std=c11 -Wall -Wextra -Werror \
+  experiments/pyrowave-tvos/tests/bitrate-policy.c \
+  -o experiments/pyrowave-tvos/build/bitrate-policy
+experiments/pyrowave-tvos/build/bitrate-policy
 cc -std=c11 -Wall -Wextra -Werror Limelight/Stream/PyrowaveEnvelope.c \
   experiments/pyrowave-tvos/tests/envelope.c -o experiments/pyrowave-tvos/build/envelope
 experiments/pyrowave-tvos/build/envelope
@@ -125,6 +151,11 @@ confirm the live log records decoded 2560×1440 and a 2560×1440 **actual
 drawable texture**, sustained presentation, bandwidth and image quality.
 On a 4K TV, 1440p decoded content may scale to a 3840×2160 drawable normally;
 check the logged native display, requested drawable and actual texture size.
+For the first quality comparison, use 2560×1440 at 60 fps SDR with Pyrowave
+at 300 Mbps against Pyrowave at 150 Mbps; keep HEVC at its existing 150 Mbps
+**Video Bitrate** setting. Confirm the requested/configured RTSP Kbps and the
+host's actual encoded rate before interpreting image quality. This is not a
+4K, HDR, adaptive-bitrate, or renderer change.
 Validate 4K60 separately on a 4K output. On lower-resolution displays the
 requested drawable is limited by the native mode. Current 2560×1440 host
 capture means 4K output is scaled capture, not native 4K detail. Unsigned

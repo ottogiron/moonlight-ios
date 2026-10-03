@@ -18,6 +18,7 @@
 #import "IdManager.h"
 #if TARGET_OS_TV
 #import "PyrowaveLiveRenderer.h"
+#import "PyrowaveBitratePolicy.h"
 #endif
 
 #include <Limelight.h>
@@ -85,12 +86,22 @@
 #if TARGET_OS_TV
     // The serverinfo tags are only an early gate. common-c checks the exact
     // DESCRIBE attributes again before selecting the experimental format.
-    if (_config.experimentalVideo &&
+    BOOL pyrowaveHostAdvertised =
         [[[serverInfoResp getStringTag:@"ApolloPyrowaveVersion"] trim] isEqualToString:@"2"] &&
         [[[serverInfoResp getStringTag:@"ApolloPyrowavePin"] trim]
-         isEqualToString:@"5e4a98f807dddd2498824e3b55ef2fe1845bcc59"] &&
-        PyrowaveLiveDecoderSupported()) {
+         isEqualToString:@"5e4a98f807dddd2498824e3b55ef2fe1845bcc59"];
+    BOOL pyrowaveAvailable = _config.experimentalVideo && pyrowaveHostAdvertised && PyrowaveLiveDecoderSupported();
+    if (_config.experimentalVideo && _config.pyrowaveBitrateKbps > 0 && !pyrowaveAvailable) {
+        [_callbacks launchFailed:@"The selected Pyrowave Bitrate needs an updated Apollo host and a supported Apple TV. Set Pyrowave Bitrate to Use Video Bitrate or update the host."];
+        return;
+    }
+    if (_config.experimentalVideo && pyrowaveAvailable) {
         _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
+        _config.bitRate = PWRequestedBitrateKbps(_config.bitRate, _config.pyrowaveBitrateKbps, YES);
+        if (_config.pyrowaveBitrateKbps > 0) {
+            // An overridden request must fail if DESCRIBE cannot select Pyrowave.
+            _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_REQUIRED;
+        }
     }
 #endif
     
@@ -134,10 +145,23 @@
     [hMan executeRequestSynchronously:[HttpRequest requestForResponse:launchResp withUrlRequest:[hMan newLaunchOrResumeRequest:@"launch" config:_config]]];
     NSString *gameSession = [launchResp getStringTag:@"gamesession"];
     if (![launchResp isStatusOk]) {
-        [_callbacks launchFailed:launchResp.statusMessage];
+        NSString *message = launchResp.statusMessage;
+#if TARGET_OS_TV
+        if (_config.pyrowaveBitrateKbps > 0 && (_config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE)) {
+            message = [NSString stringWithFormat:@"Could not start Pyrowave Bitrate %d Mbps. Check the updated Apollo host or lower Pyrowave Bitrate. Details: %@",
+                       _config.bitRate / 1000, launchResp.statusMessage];
+        }
+#endif
+        [_callbacks launchFailed:message];
         Log(LOG_E, @"Failed Launch Response: %@", launchResp.statusMessage);
         return FALSE;
     } else if (gameSession == NULL || [gameSession isEqualToString:@"0"]) {
+#if TARGET_OS_TV
+        if (_config.pyrowaveBitrateKbps > 0 && (_config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE)) {
+            [_callbacks launchFailed:@"The host could not launch at the selected Pyrowave Bitrate. Update Apollo or lower Pyrowave Bitrate."];
+            return FALSE;
+        }
+#endif
         [_callbacks launchFailed:@"Failed to launch app"];
         Log(LOG_E, @"Failed to parse game session");
         return FALSE;
@@ -152,10 +176,23 @@
     [hMan executeRequestSynchronously:[HttpRequest requestForResponse:resumeResp withUrlRequest:[hMan newLaunchOrResumeRequest:@"resume" config:_config]]];
     NSString* resume = [resumeResp getStringTag:@"resume"];
     if (![resumeResp isStatusOk]) {
-        [_callbacks launchFailed:resumeResp.statusMessage];
+        NSString *message = resumeResp.statusMessage;
+#if TARGET_OS_TV
+        if (_config.pyrowaveBitrateKbps > 0 && (_config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE)) {
+            message = [NSString stringWithFormat:@"Could not resume Pyrowave Bitrate %d Mbps. Check the updated Apollo host or lower Pyrowave Bitrate. Details: %@",
+                       _config.bitRate / 1000, resumeResp.statusMessage];
+        }
+#endif
+        [_callbacks launchFailed:message];
         Log(LOG_E, @"Failed Resume Response: %@", resumeResp.statusMessage);
         return FALSE;
     } else if (resume == NULL || [resume isEqualToString:@"0"]) {
+#if TARGET_OS_TV
+        if (_config.pyrowaveBitrateKbps > 0 && (_config.supportedVideoFormats & VIDEO_FORMAT_PYROWAVE)) {
+            [_callbacks launchFailed:@"The host could not resume at the selected Pyrowave Bitrate. Update Apollo or lower Pyrowave Bitrate."];
+            return FALSE;
+        }
+#endif
         [_callbacks launchFailed:@"Failed to resume app"];
         Log(LOG_E, @"Failed to parse resume response");
         return FALSE;
