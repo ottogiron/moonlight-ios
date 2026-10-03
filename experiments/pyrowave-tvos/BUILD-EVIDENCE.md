@@ -12,7 +12,16 @@ No signing, device installation, or playback was run.
 | Added an untracked file in common-c, then ran preparation | Refused with `common-c has unexpected local changes`; the temporary file was removed and preparation passed again |
 | `git -C moonlight-common/moonlight-common-c diff --binary --unified=0 \| cmp - experiments/pyrowave-tvos/patches/common-c-pyrowave.patch` | Exact match |
 | Existing focused C/C++/Objective-C checks | Bitrate policy, envelope, renderer gate, drawable size, drain accounting, and report stats passed |
-| `sh -n` on four preparation scripts; `git diff --check` | Passed |
+| `sh -n` on four preparation scripts; staged whitespace check with upstream blank-line whitespace exempted | Passed; the embedded MSL's original bytes were preserved for exact hash matching |
+
+Fresh-clone check: `git clone --local --no-hardlinks .` produced commit
+`5a49a4a62414a742d82d088372f22ac1b55e16bf` with no `generated/`
+directory and both top-level submodules uninitialized. In that clone,
+`scripts/prepare-build.sh` initialized all four public submodules, generated
+the exact decoder files, and applied the patch. A second run passed without
+changing files. `git status --short` showed only the expected modified common-c
+submodule; its diff matched the tracked patch byte for byte. The clone was
+used for the following additional native builds.
 
 Both native builds used this command shape from the repository root, with
 `CONFIGURATION` set to `Debug` and `Release` in separate runs:
@@ -29,6 +38,10 @@ Debug: `** BUILD SUCCEEDED **` in
 `build/repro-evidence/moonlight-tv-debug-network.log` (ignored local log).
 Release: `** BUILD SUCCEEDED **` in
 `build/repro-evidence/moonlight-tv-release-escalated.log` (ignored local log).
+Fresh clone Debug: `** BUILD SUCCEEDED **` in its ignored
+`build/repro-evidence/fresh-debug.log`.
+Fresh clone Release: `** BUILD SUCCEEDED **` in its ignored
+`build/repro-evidence/fresh-release.log`.
 The first sandboxed Debug attempt could not resolve GitHub for the locked public
 OpenSSL package; the first sandboxed Release attempt could not write Swift/Clang
 caches outside the workspace. Both passed when run with the access Xcode needs.
