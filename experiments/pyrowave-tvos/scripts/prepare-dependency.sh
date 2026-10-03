@@ -2,15 +2,15 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-pin=89f7e47d4abbf650c91fae766728af866c5e32a0
+pin=5e4a98f807dddd2498824e3b55ef2fe1845bcc59
 source_dir=${1:-}
 if [ -z "$source_dir" ]; then
   source_dir=generated/source
   if [ ! -d "$source_dir/.git" ]; then
-    git clone https://github.com/Themaister/pyrowave.git "$source_dir"
+    echo 'Provide an explicit local checkout of the pinned private Pyrowave source.' >&2
+    echo 'For example: scripts/prepare-dependency.sh generated/codec-scan-5e4a98f-source' >&2
+    exit 2
   fi
-  git -C "$source_dir" fetch origin "$pin"
-  git -C "$source_dir" checkout --detach "$pin"
 fi
 actual=$(git -C "$source_dir" rev-parse HEAD)
 if [ "$actual" != "$pin" ]; then

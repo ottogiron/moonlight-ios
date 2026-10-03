@@ -88,7 +88,7 @@
     if (_config.experimentalVideo &&
         [[[serverInfoResp getStringTag:@"ApolloPyrowaveVersion"] trim] isEqualToString:@"2"] &&
         [[[serverInfoResp getStringTag:@"ApolloPyrowavePin"] trim]
-         isEqualToString:@"89f7e47d4abbf650c91fae766728af866c5e32a0"] &&
+         isEqualToString:@"5e4a98f807dddd2498824e3b55ef2fe1845bcc59"] &&
         PyrowaveLiveDecoderSupported()) {
         _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
     }

@@ -37,7 +37,8 @@ static int Run(int argc, const char **argv) {
         }
     }
     NSDictionary *report = @{ @"schema_version": @1, @"program": @"pyrowave-mac-verify",
-                              @"pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
+                              @"pyrowave_commit": @"5e4a98f807dddd2498824e3b55ef2fe1845bcc59",
+                              @"fixture_pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
                               @"tolerance_lsb": @2, @"passed": @(allPassed), @"runs": runs };
     NSData *json = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:&error];
     if (!json) { fprintf(stderr, "report: %s\n", error.localizedDescription.UTF8String); return 1; }

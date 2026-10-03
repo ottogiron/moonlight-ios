@@ -3,7 +3,7 @@
 This is the client side of the authenticated Apollo session experiment. The TV
 setting **Experimental Video** defaults off. When enabled, the client checks
 both `/serverinfo` tags and both RTSP DESCRIBE attributes for envelope version
-`2` and pin `89f7e47d4abbf650c91fae766728af866c5e32a0`. Missing or
+`2` and pin `5e4a98f807dddd2498824e3b55ef2fe1845bcc59`. Missing or
 mismatched capability keeps conventional negotiation. The common-c selection
 also requires the Sunshine SDP generation path used by Apollo. Non-60 fps, unsupported
 dimensions, HDR preference, or a bitrate below the host's minimum also keep
@@ -23,13 +23,48 @@ base SHA before applying. From the repository root:
 git submodule update --init --recursive moonlight-common/moonlight-common-c X1Kit
 experiments/pyrowave-tvos/scripts/prepare-common-c.sh
 experiments/pyrowave-tvos/scripts/prepare-common-c.sh # idempotence check
-experiments/pyrowave-tvos/scripts/prepare-dependency.sh /path/to/pinned/pyrowave
+bundle=/path/to/codec-source.bundle
+printf '%s  %s\n' ad0bb91576bfaa134947aa6bc021a4f3e2de48ec607f63a6648e214c7e0d3e26 "$bundle" | shasum -a 256 -c -
+source_dir="$PWD/experiments/pyrowave-tvos/generated/codec-scan-5e4a98f-source"
+git clone --no-checkout "$bundle" "$source_dir"
+git -C "$source_dir" checkout --detach 5e4a98f807dddd2498824e3b55ef2fe1845bcc59
+experiments/pyrowave-tvos/scripts/prepare-dependency.sh "$source_dir"
 ```
 
 `prepare-dependency.sh` verifies the source HEAD and byte-for-byte Metal
-subset at the pin. Its generated output is ignored. A supplied prepared subset
+subset at the pin. The private commit is supplied by the verified bundle; the
+default preparation path only reuses an existing local `generated/source`
+checkout and never fetches it from public upstream. Its generated output is
+ignored. A supplied prepared subset
 can also be verified with `shasum -a 256 -c scripts/pyrowave-metal.sha256`
 from `experiments/pyrowave-tvos`.
+
+If an existing main checkout still has the old common-c patch, identify it
+exactly before replacing it. From the repository root, use the saved
+`common-c-before.patch` snapshot (SHA-256
+`fdc80c96ab83878ebbbb0e77e900caa43d15bf52a24d5a962714044707b1006c`):
+
+```sh
+common=moonlight-common/moonlight-common-c
+old_patch=/path/to/common-c-before.patch
+new_patch="$PWD/experiments/pyrowave-tvos/patches/common-c-pyrowave.patch"
+test "$(git -C "$common" rev-parse HEAD)" = f900dd4767759c7b9d0e93bcea666b55c69ea62f
+printf '%s  %s\n' fdc80c96ab83878ebbbb0e77e900caa43d15bf52a24d5a962714044707b1006c "$old_patch" | shasum -a 256 -c -
+git -C "$common" diff --binary --unified=0 | cmp - "$old_patch"
+test -z "$(git -C "$common" ls-files --others --exclude-standard)"
+git -C "$common" apply --reverse --unidiff-zero --check "$old_patch"
+git -C "$common" apply --reverse --unidiff-zero "$old_patch"
+git -C "$common" apply --unidiff-zero --check "$new_patch"
+git -C "$common" apply --unidiff-zero "$new_patch"
+experiments/pyrowave-tvos/scripts/prepare-common-c.sh # confirms exact new patch
+```
+
+The original phase-2 fixture manifest still records generator commit
+`89f7e47d4abbf650c91fae766728af866c5e32a0`. The decoder and bitstream
+sources are byte-identical at the new pin, so those fixtures remain suitable
+for decoder compatibility checks. Probe reports identify the current codec
+binary separately from the fixture generator. They are not a new physical
+performance or playback result.
 
 ## Build and focused check
 

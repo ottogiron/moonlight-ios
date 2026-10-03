@@ -273,7 +273,8 @@ static const NSTimeInterval PWDrainTimeoutSeconds = 3.0;
     NSMutableDictionary *report = [counters mutableCopy];
     [report addEntriesFromDictionary:@{
         @"schema_version": @1, @"program": @"Pyrowave TV Probe", @"passed": @(passed),
-        @"failure": _failure ?: @"", @"pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
+        @"failure": _failure ?: @"", @"pyrowave_commit": @"5e4a98f807dddd2498824e3b55ef2fe1845bcc59",
+        @"fixture_pyrowave_commit": @"89f7e47d4abbf650c91fae766728af866c5e32a0",
         @"tolerance_lsb": @2, @"validation": _checks ?: @[],
         @"cpu_submission_ms": PWStats(_cpuSubmission, _drain.submitted, 0),
         @"gpu_decode_ms": PWStats(_gpuDecode, _drain.submitted, _drain.pendingCompletions()),

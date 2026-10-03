@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 source_dir=${1:-generated/source}
-pin=89f7e47d4abbf650c91fae766728af866c5e32a0
+pin=5e4a98f807dddd2498824e3b55ef2fe1845bcc59
 if [ "$(git -C "$source_dir" rev-parse HEAD)" != "$pin" ]; then
   echo 'Pyrowave source checkout is not at the pinned commit.' >&2
   exit 1

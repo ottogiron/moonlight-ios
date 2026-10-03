@@ -5,10 +5,11 @@ if [ ! -f generated/pyrowave-metal/COMMIT ]; then
   echo 'Run scripts/prepare-dependency.sh first.' >&2
   exit 1
 fi
-if [ "$(cat generated/pyrowave-metal/COMMIT)" != 89f7e47d4abbf650c91fae766728af866c5e32a0 ]; then
+if [ "$(cat generated/pyrowave-metal/COMMIT)" != 5e4a98f807dddd2498824e3b55ef2fe1845bcc59 ]; then
   echo 'Prepared dependency pin is wrong.' >&2
   exit 1
 fi
+shasum -a 256 -c scripts/pyrowave-metal.sha256
 mkdir -p build
 xcrun clang++ -std=c++14 -fobjc-arc -Wall -Wextra -O2 \
   -mmacosx-version-min=13.0 -I Core -I generated/pyrowave-metal \
