@@ -35,65 +35,47 @@ image quality parity or lower latency.
 
 ## Prepare a clean checkout
 
-The tracked common-c gitlink stays at `f900dd4767759c7b9d0e93bcea666b55c69ea62f`.
-The four common-c file edits are in `patches/common-c-pyrowave.patch`; the
-submodule is expected to show **dirty** after preparation. Do not commit its
-local gitlink. The patch uses zero context and is checked against the exact
-base SHA before applying. From the repository root:
+From the repository root, run one command before the first unsigned build:
 
 ```sh
-git submodule update --init --recursive moonlight-common/moonlight-common-c X1Kit
-experiments/pyrowave-tvos/scripts/prepare-common-c.sh
-experiments/pyrowave-tvos/scripts/prepare-common-c.sh # idempotence check
-bundle=/path/to/codec-source.bundle
-printf '%s  %s\n' ad0bb91576bfaa134947aa6bc021a4f3e2de48ec607f63a6648e214c7e0d3e26 "$bundle" | shasum -a 256 -c -
-source_dir="$PWD/experiments/pyrowave-tvos/generated/codec-scan-5e4a98f-source"
-git clone --no-checkout "$bundle" "$source_dir"
-git -C "$source_dir" checkout --detach 5e4a98f807dddd2498824e3b55ef2fe1845bcc59
-experiments/pyrowave-tvos/scripts/prepare-dependency.sh "$source_dir"
+experiments/pyrowave-tvos/scripts/prepare-build.sh
 ```
 
-`prepare-dependency.sh` verifies the source HEAD and byte-for-byte Metal
-subset at the pin. The private commit is supplied by the verified bundle; the
-default preparation path only reuses an existing local `generated/source`
-checkout and never fetches it from public upstream. Its generated output is
-ignored. A supplied prepared subset
-can also be verified with `shasum -a 256 -c scripts/pyrowave-metal.sha256`
-from `experiments/pyrowave-tvos`.
+This initializes the pinned public `X1Kit`, common-c, `enet`, and `nanors`
+submodules. It verifies the tracked Pyrowave Metal subset and copies it to the
+ignored `experiments/pyrowave-tvos/generated/pyrowave-metal/` path used by Xcode.
+It then applies the exact tracked common-c patch at base
+`f900dd4767759c7b9d0e93bcea666b55c69ea62f`. Repeating the command verifies
+the existing files and patch without changing them. Unexpected submodule commits,
+local source edits, staged changes, untracked submodule files, or altered decoder
+files make preparation fail rather than overwrite work.
 
-If an existing main checkout still has the old common-c patch, identify it
-exactly before replacing it. From the repository root, use the saved
-`common-c-before.patch` snapshot (SHA-256
-`fdc80c96ab83878ebbbb0e77e900caa43d15bf52a24d5a962714044707b1006c`):
+The eight vendored files, including the MIT `LICENSE`, are exact blobs from the
+reviewed Pyrowave commit `5e4a98f807dddd2498824e3b55ef2fe1845bcc59`.
+`scripts/pyrowave-metal.sha256` records their hashes. The `COMMIT` marker records
+the source pin. The private whole-repository source bundle is not a build input.
+The public submodule URLs and exact Git commits are recorded in `.gitmodules`
+and the repository gitlinks; their nested pins are in common-c. Reproducibility
+needs only this repository and those pinned public submodules.
+See `DEPENDENCY-MANIFEST.md` for every exact revision and decoder hash.
 
-```sh
-common=moonlight-common/moonlight-common-c
-old_patch=/path/to/common-c-before.patch
-new_patch="$PWD/experiments/pyrowave-tvos/patches/common-c-pyrowave.patch"
-test "$(git -C "$common" rev-parse HEAD)" = f900dd4767759c7b9d0e93bcea666b55c69ea62f
-printf '%s  %s\n' fdc80c96ab83878ebbbb0e77e900caa43d15bf52a24d5a962714044707b1006c "$old_patch" | shasum -a 256 -c -
-git -C "$common" diff --binary --unified=0 | cmp - "$old_patch"
-test -z "$(git -C "$common" ls-files --others --exclude-standard)"
-git -C "$common" apply --reverse --unidiff-zero --check "$old_patch"
-git -C "$common" apply --reverse --unidiff-zero "$old_patch"
-git -C "$common" apply --unidiff-zero --check "$new_patch"
-git -C "$common" apply --unidiff-zero "$new_patch"
-experiments/pyrowave-tvos/scripts/prepare-common-c.sh # confirms exact new patch
-```
-
-The original phase-2 fixture manifest still records generator commit
-`89f7e47d4abbf650c91fae766728af866c5e32a0`. The decoder and bitstream
-sources are byte-identical at the new pin, so those fixtures remain suitable
-for decoder compatibility checks. Probe reports identify the current codec
-binary separately from the fixture generator. They are not a new physical
-performance or playback result.
+After preparation, `git status --short` should report only the common-c submodule
+as modified. The decoder copy and Xcode products live in ignored directories.
+`git -C moonlight-common/moonlight-common-c diff --binary --unified=0` must match
+`experiments/pyrowave-tvos/patches/common-c-pyrowave.patch` byte for byte.
+`scripts/prepare-common-c.sh --check` and `scripts/verify-dependency.sh` check
+those states without rewriting files. The submodule dirt is expected build setup;
+changes to tracked project files, signing metadata, or other source are not.
+Do not commit the local common-c gitlink or generated build output.
 
 ## Build and focused check
 
-Use Xcode 27 and the `appletvos` SDK. Build unsigned for a generic tvOS
-destination; no TV installation is part of this step.
+Use Xcode 27 and the `appletvos` SDK. These commands build unsigned for a
+generic physical tvOS destination without a development team or signing profile.
+The production Moonlight TV build does not need the old diagnostic fixture blobs.
 
 ```sh
+python3 experiments/pyrowave-tvos/tests/test_dependency_preparation.py
 heavy xcodebuild -project Moonlight.xcodeproj -scheme 'Moonlight TV' \
   -configuration Debug -sdk appletvos -destination 'generic/platform=tvOS' \
   -derivedDataPath experiments/pyrowave-tvos/build/DerivedData-live \
@@ -116,6 +98,13 @@ cc -std=c11 -Wall -Wextra -Werror \
   experiments/pyrowave-tvos/tests/drawable-size.c -o experiments/pyrowave-tvos/build/drawable-size
 experiments/pyrowave-tvos/build/drawable-size
 ```
+
+For a device installation or later update, open `Moonlight.xcodeproj` in Xcode,
+select **Moonlight TV**, and choose your own signing team in Xcode's **Signing &
+Capabilities** UI. Keep the existing `com.ottogiron.moonlight.pyrowave` bundle ID
+and current app settings so Xcode updates the same app. Build and install from
+Xcode under your own account. No signing or device action is part of the setup
+script or unsigned commands above.
 
 The parser accepts one complete decode unit only after checking its header,
 negotiated dimensions and frame number, color profile, counts, record lengths,

@@ -3,11 +3,13 @@
 This is an isolated 1080p SDR decode probe; the live streaming path is described
 in `LIVE-INTEGRATION.md`. The macOS verifier and tvOS viewer compile the same
 Metal decode core. The current Pyrowave Metal source is MIT licensed and pinned
-to `5e4a98f807dddd2498824e3b55ef2fe1845bcc59`; the preparation script copies
-only the decoder, its bitstream parser, embedded MSL, and license into ignored
-`generated/`.
-`scripts/verify-dependency.sh` compares each generated file with its blob at the
-pin and checks the recorded SHA-256 list in `scripts/pyrowave-metal.sha256`.
+to `5e4a98f807dddd2498824e3b55ef2fe1845bcc59`. The exact reviewed
+decoder, bitstream parser, embedded MSL, and MIT license are tracked in
+`vendor/pyrowave-metal/`; the preparation script copies them into ignored
+`generated/pyrowave-metal/`. `scripts/verify-dependency.sh` verifies both copies
+against `scripts/pyrowave-metal.sha256` and the recorded pin. The live Moonlight
+TV clean-checkout path is in `LIVE-INTEGRATION.md`.
+
 The original fixtures were generated at
 `89f7e47d4abbf650c91fae766728af866c5e32a0`. The decoder, bitstream source,
 and API are unchanged between the two commits; the current embedded MSL changes
@@ -20,8 +22,8 @@ and `fixture_pyrowave_commit` for the fixture generator.
 From this directory:
 
 ```sh
-scripts/prepare-dependency.sh /path/to/an/existing/pinned/pyrowave/checkout
-scripts/verify-dependency.sh /path/to/the/pinned/checkout
+scripts/prepare-dependency.sh
+scripts/verify-dependency.sh
 scripts/stage-fixtures.sh /path/to/fixture-directory
 heavy scripts/build-mac.sh
 python3 scripts/test-fixture-loader.py
@@ -30,11 +32,10 @@ scripts/test-report.sh
 heavy build/pyrowave-mac-verify Fixtures > build/mac-report.json
 ```
 
-The new commit is private to the supplied source bundle. Verify its SHA-256
-(`ad0bb91576bfaa134947aa6bc021a4f3e2de48ec607f63a6648e214c7e0d3e26`),
-clone it into an ignored source checkout, and detach at the exact pin before
-preparation. `LIVE-INTEGRATION.md` has the commands. No-argument preparation
-only reuses an already pinned local `generated/source` checkout.
+The private full-source bundle is no longer needed for this build. The
+vendored subset was compared byte for byte with each Git blob at the pinned
+commit before tracking it. Fixture staging and the macOS verifier below are
+optional diagnostics, separate from the production Moonlight TV build.
 
 The external directory must contain `manifest.json` and all six named payload,
 packet CSV, and Vulkan reference files. `Fixtures/`, `generated/`, `build/`, and
