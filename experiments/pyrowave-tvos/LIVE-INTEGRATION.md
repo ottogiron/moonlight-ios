@@ -63,7 +63,8 @@ After preparation, `git status --short` should report only the common-c submodul
 as modified. The decoder copy and Xcode products live in ignored directories.
 `git -C moonlight-common/moonlight-common-c diff --binary --unified=0` must match
 `experiments/pyrowave-tvos/patches/common-c-pyrowave.patch` byte for byte.
-`scripts/prepare-common-c.sh --check` and `scripts/verify-dependency.sh` check
+`experiments/pyrowave-tvos/scripts/prepare-common-c.sh --check` and
+`experiments/pyrowave-tvos/scripts/verify-dependency.sh` check
 those states without rewriting files. The submodule dirt is expected build setup;
 changes to tracked project files, signing metadata, or other source are not.
 Do not commit the local common-c gitlink or generated build output.
