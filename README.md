@@ -38,11 +38,13 @@ Use a revision containing these baseline changes, or apply the baseline patch
 locally if it is still uncommitted. Xcode also resolves the project's OpenSSL
 Swift package.
 
-Open `Moonlight.xcodeproj`, select the **Moonlight TV** scheme and target, then
-enable automatic signing in **Signing & Capabilities** and choose your own
-**Team** for both configurations. The tvOS app and library have no preset team;
-the app overrides the shared project's upstream team. Keep account credentials
-and local team selections out of committed changes.
+Set your signing team before opening the project: copy `Local.xcconfig.example`
+to `Local.xcconfig` and put your team ID in it. Git ignores `Local.xcconfig`,
+and the app targets and the tvOS probe read the team from it through
+`Signing.xcconfig`, so the project files stay unchanged. Then open
+`Moonlight.xcodeproj` and select the **Moonlight TV** scheme; automatic signing
+is already enabled. Do not choose a team in **Signing & Capabilities**: Xcode
+would write it into the project file.
 
 Pair the Apple TV on the same network. In Xcode 27, open **Xcode > Open
 Developer Tool > Device Hub**, then choose **+ > Pair Nearby Device** and
@@ -76,6 +78,27 @@ Repeat with `-configuration Release`. An unsigned build cannot be installed on
 the TV. Native builds, signed installation alongside stock, and conventional
 1080p60 playback remain the baseline gate before codec work. Refresh signing
 through Xcode and rebuild/reinstall when your provisioning profile expires.
+
+### Fork layout
+
+`master` mirrors upstream `master` exactly and takes no commits of its own.
+`otto` is the personal branch and the fork's default: upstream plus the
+Pyrowave work. The `moonlight-common-c` submodule points at a fork with the
+same layout, because the Pyrowave negotiation lives in that library.
+
+```sh
+git checkout otto
+git fetch origin
+git fetch upstream
+git branch -f master upstream/master
+git merge master
+git submodule update --init --recursive
+git push origin master otto
+```
+
+The fork is public. Machine names, home-directory paths, network addresses,
+device identifiers and signing identities do not belong in commits or commit
+messages.
 
 ### Upstream build instructions
 

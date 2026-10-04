@@ -1,0 +1,7 @@
+// Signing identity for the app targets.
+//
+// The team that signs a personal build stays out of the repository: copy
+// Local.xcconfig.example to Local.xcconfig and set DEVELOPMENT_TEAM there.
+// Local.xcconfig is ignored by Git.
+DEVELOPMENT_TEAM =
+#include? "Local.xcconfig"
